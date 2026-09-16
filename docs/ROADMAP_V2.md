@@ -1,5 +1,15 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
+## 사용자 정의 Phase 7 — 자동 공고 발견
+
+이 Phase 7은 아래 과거 지원 추적 로드맵 번호를 대체한다. 지원 추적은 구현하지 않는다.
+7A: 역할 기반 계획·순차 수집·중복 제거·상세 예산/재사용 완료.
+7B: 검색 실행/신규 공고 영속 이력 예정.
+7C: 점수 없는 설명 가능한 검토 분류 예정.
+7D: Streamlit/일회성 CLI·실사용 안정화 예정.
+각 단계는 전체 검증·문서·commit/push/clean 뒤 다음 단계로 진행한다.
+
+
 ## Phase 6A 완료 기록 — Explainable Job Gap Comparison (2026-09-17)
 
 - Phase 5 d273d3d push/clean 이후 01:38:53 KST에 시작했다. deadline까지 약 7시간 40분이었다.

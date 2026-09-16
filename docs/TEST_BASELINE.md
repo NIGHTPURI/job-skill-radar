@@ -1,5 +1,16 @@
 # Phase 1A — Regression Test Baseline
 
+## Phase 7A 검증 (2026-09-17)
+
+시작 64d7511, 로컬/원격 동일·clean, 395개 통과. 새 discovery 테스트17개로 총412개다.
+역할/복수/중복/비어 있는 계획·보유 기술 독립성·예산·질의 partial/failed/empty·identity 중복·
+발견 질의 provenance·상세 재사용/refresh/예산/실패 보존·source 격리·원자성·HTTP 경계의
+연결 종료와 다른 writer lock 획득을 검증한다. 실 HTTP는 차단하고 temp DB만 사용한다.
+전체 회귀·Work24 집중 테스트·요건 평가·샘플 CLI·diff check를 수행한다.
+요건 평가60/60·144/144·13/13, required/preferred FP0 유지(합성 fixture 지표만 의미).
+실 API smoke는 아직 수행하지 않았다.
+
+
 ## Phase 6A 검증 (2026-09-17)
 
 Phase 5 367개에서 **395개 모두 통과**. 실패/오류/expected failure/skip 0.

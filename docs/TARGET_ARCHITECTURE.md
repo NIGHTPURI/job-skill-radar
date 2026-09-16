@@ -1,5 +1,17 @@
 # Target Architecture — 개인용 Job Intelligence
 
+## Phase 7A 현재 경계 (2026-09-17)
+
+최신 단계는 사용자 정의 자동 발견 Phase 7A다. 지원 추적/점수는 범위 밖이다.
+discovery.build_discovery_plan은 시간·DB·HTTP·UI 없는 순수 역할 계획이다.
+discovery_pipeline.discover_work24_jobs는 저장 프로필→계획→순차 목록→중복 제거→제한 상세→
+discovery_storage의 짧은 atomic 저장 순이다. HTTP 동안 열린 DB 연결이 없다.
+Work24 외 source는 받아들이지 않는다. query별 발견 provenance와 안전한 실패 category를
+반환한다. 기존 pipeline 목록/상세 함수, raw, 추출기, matcher, 시장 집계는 변경하지 않는다.
+모든 결과를 받아 마지막 저장하므로 프로세스 강제 종료/예상 밖 오류 시 미저장 실행은 사라질 수
+있다. 재시도/실행 중 상태/데몬은 없다. 예산과 의미는 데이터 설계 Phase 7A 절을 따른다.
+
+
 ## Phase 6A 현재 구현 경계 (2026-09-17)
 
 최신 완료 상태는 Phase 4A·5·6A, schema v3, extractor v2다. 아래 단계별 기록은 완료 당시 상태다.

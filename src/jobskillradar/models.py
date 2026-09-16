@@ -234,3 +234,49 @@ class JobComparison(TypedDict):
     conditions: list[ConditionComparison]
     posting_role: str | None
     role_alignment: Literal["target_role", "outside_target_roles", "unknown"]
+
+
+class DiscoveryQuery(TypedDict):
+    keyword: str
+    target_roles: list[str]
+
+
+class DiscoveryPlan(TypedDict):
+    status: Literal["ready", "profile_needs_target_role"]
+    target_roles: list[str]
+    queries: list[DiscoveryQuery]
+
+
+class DiscoveryMember(TypedDict):
+    source: str
+    posting_id: str
+    queries: list[str]
+    was_new: bool
+
+
+class DiscoveryQueryFailure(TypedDict):
+    query: str
+    reason: str
+
+
+class DiscoveryRun(TypedDict):
+    run_id: str
+    source: str
+    profile_revision: int
+    started_at: str
+    completed_at: str
+    status: Literal["completed", "partial", "failed"]
+    plan: DiscoveryPlan
+    pages: int
+    display: int
+    max_details: int
+    refresh_existing_details: bool
+    list_result_count: int
+    query_successes: int
+    query_failures: list[DiscoveryQueryFailure]
+    details_saved: int
+    detail_failures: list[DetailFailure]
+    details_reused: int
+    details_deferred: int
+    new_postings: int
+    postings: list[DiscoveryMember]
