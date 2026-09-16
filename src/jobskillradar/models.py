@@ -112,3 +112,48 @@ class CollectionResult(TypedDict):
     new_postings: int
     details_saved: int
     detail_failures: list[DetailFailure]
+
+
+RequirementType = Literal["required", "preferred", "responsibility", "unspecified"]
+RequirementQuality = Literal[
+    "detail_not_fetched",
+    "detail_fetched_but_no_requirement_evidence",
+    "requirements_extracted",
+    "requirement_evidence_present_but_unclassified",
+]
+
+
+class RequirementEvidence(TypedDict):
+    source_field: str
+    source_index: int | None  # Index within keywords; None for scalar fields.
+    evidence_text: str
+    evidence_start: int  # Python string slice offsets, not byte or skill offsets.
+    evidence_end: int
+    section_heading: str | None
+    section_start: int | None
+    requirement_type: RequirementType
+    rule: str  # Stable explanation code; never a probability.
+
+
+class SkillRequirement(TypedDict):
+    skill: str
+    requirement_type: RequirementType
+    evidence: list[RequirementEvidence]
+
+
+class SourceCondition(TypedDict):
+    source_field: str
+    raw_text: str | None
+    status: Literal["missing", "not_interpreted", "normalized"]
+    normalized_value: str | None
+
+
+class RequirementExtraction(TypedDict):
+    extractor_version: int
+    source: str | None
+    posting_id: str | None
+    detail_fetched_at: str | None
+    quality_status: RequirementQuality
+    skills: list[SkillRequirement]
+    unclassified_evidence: list[RequirementEvidence]
+    conditions: list[SourceCondition]

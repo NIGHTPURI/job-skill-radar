@@ -5,10 +5,11 @@ from pathlib import Path
 
 from .analyzer import analyze_postings
 from .config import get_db_path
-from .models import AnalysisResult, CollectionResult, JobPosting, PostingDetail
+from .models import AnalysisResult, CollectionResult, JobPosting, PostingDetail, RequirementExtraction
 from .normalizer import clean_postings
 from .sample_data import SAMPLE_POSTINGS
-from .storage import load_postings_from_db, save_posting_details_to_db, save_postings_to_db
+from .requirement_extractor import extract_requirements
+from .storage import load_posting_detail_from_db, load_postings_from_db, save_posting_details_to_db, save_postings_to_db
 from .work24_client import Work24Error, fetch_posting_detail, fetch_work24_postings
 
 
@@ -24,6 +25,20 @@ DEFAULT_KEYWORDS = [
 # A callable is sufficient here; no provider class or repository is needed.
 Collector = Callable[..., list[JobPosting]]
 DetailFetcher = Callable[..., PostingDetail]
+
+
+def load_posting_requirements(
+    source: str, posting_id: str, *, db_path: Path | None = None,
+) -> RequirementExtraction:
+    """Derive on demand after the detail reader has closed its DB connection.
+
+    No HTTP, derived cache, or writes to posting data. Unexpected extraction
+    failures propagate and cannot overwrite raw detail or a previous result.
+    The existing storage reader still ensures the schema on first open.
+    """
+    detail = load_posting_detail_from_db(get_db_path() if db_path is None else db_path, source, posting_id)
+    result = extract_requirements(detail)
+    return {**result, "source": source, "posting_id": posting_id}
 
 
 def analyze_sample() -> AnalysisResult:

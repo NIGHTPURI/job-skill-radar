@@ -1,6 +1,6 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 3A 검증](#phase-3a-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
+최신 결과는 문서 끝의 [Phase 3B 검증](#phase-3b-검증-2026-09-17)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
@@ -485,3 +485,107 @@ Python(5/6) → A/B Test(2/6) → Tableau(2/6) → Statistics(1/6) → GA4(1/6)�
 실환경 검증이 남는다. 자유 텍스트의 개인정보 자동 정제, TTL/재시도/이력 snapshot/실패 이력
 영속화는 없다. 백업은 최초 migration을 다른 writer 중지 상태로 실행하는 운영 정책을 따른다.
 상세 필드는 raw evidence로만 보존한다. 요건 추출·job matching은 없으며 **Phase 3B는 미시작**이다.
+
+## Phase 3B 검증 (2026-09-17)
+
+시작 HEAD는 `78276e0` (`feat: add Work24 job detail ingestion`), 브랜치는 `refactor/v2`,
+작업 트리는 깨끗했다. 구현 전 git status/log, 전체 unittest **275/275**, sample CLI 12건·exit 0,
+git diff --check를 확인했다. 지정 아키텍처 문서와 원문/시장 추출/수집/저장/UI 경계를 검토하고
+순수 추출 + 조회 시 재계산, 파생 persistence 없음, schema v2 유지 결정을 먼저 보고했다.
+
+최종 **306개 모두 통과**다. expected failures/failures/errors/skips/unexpected successes 모두 0.
+Linux/Python 3.12.3에서 전체 최종 실행은 2.982초이며 시간은 환경에 따라 달라진다.
+기존 테스트를 수정하거나 예상 실패로 바꾸지 않았다. 신규 테스트 method는 31개이며
+18개 수동 기대값 평가 사례와 subTest 조합은 테스트 수에 중복 합산하지 않았다.
+
+| 최종 검증 | 결과 |
+|---|---|
+| 전체 unittest | 306/306 통과 |
+| requirement extractor | 23/23 통과, 그 안에 평가 fixture 18사례 포함 |
+| requirement application/CLI | 8/8 통과 |
+| Work24 목록/detail parser/client | 41/41 통과 |
+| migration | 기존 19/19 통과; 새 migration 없음 |
+| pipeline 전체 | 24/24 통과; 위 application 8개 포함 |
+| storage + storage boundary | 16/16 통과 |
+| raw posting detail persistence | 7/7 통과 |
+| persistence integrity | 15/15 통과 |
+| normalizer | 11/11 통과 |
+| skill extractor | 42/42 통과 |
+| role classifier | 34/34 통과 |
+| analyzer | 17/17 통과 |
+| recommender | 24/24 통과 |
+| sample CLI | 12건, 기존 출력 유지, exit 0 |
+| git diff --check | 공백 오류 없음, exit 0 |
+
+실행 명령:
+
+```bash
+python -B -m unittest discover -s tests
+python -B -m unittest discover -s tests -p test_requirement_extractor.py
+python -B -m unittest discover -s tests -p test_pipeline_requirements.py
+python -B -m unittest discover -s tests -p test_migrations.py
+python -B -m unittest discover -s tests -p 'test_work24*.py'
+python -B -m unittest discover -s tests -p 'test_pipeline*.py'
+python -B -m unittest discover -s tests -p 'test_storage*.py'
+python -B -m unittest discover -s tests -p test_posting_details.py
+python -B -m unittest discover -s tests -p test_persistence_integrity.py
+python -B -m unittest discover -s tests -p test_normalizer.py
+python -B -m unittest discover -s tests -p test_skill_extractor.py
+python -B -m unittest discover -s tests -p test_role_classifier.py
+python -B -m unittest discover -s tests -p test_analyzer.py
+python -B -m unittest discover -s tests -p test_recommender.py
+python -B scripts/run_demo.py
+git diff --check
+git status
+```
+
+### 평가 근거와 수정한 경계
+
+`tests/fixtures/requirements/evaluation.json`은 직접 만든 짧은 합성 문장 18사례다.
+각 사례에 검토 이유·입력·기술별 예상 분류·품질 상태를 고정했다. 실제 공고를 복사하지 않았다.
+한국어 필수/우대/업무 섹션, 영어 섹션, 제목 없는 단서, mixed posting, 기술스택,
+부정문, 여러 섹션의 같은 기술, Spring/Boot 겹침, alias, 기술 없는 문장, 비기술 자격,
+모호성, 알 수 없는 제목/서식, 중립 섹션 전환, certificate/computer_skill과 inline 조각을 포함한다.
+
+추가 테스트는 단서가 해당 조각에만 적용됨, 부정이 섹션/우대 필드보다 우선함,
+필수/우대 충돌·질문·인용·대안·복합 conjunction의 미분류, unknown HTML/표 제목의 상태 종료,
+CRLF/Unicode 원문 slice와 섹션 위치, 필드 간 상태 격리, keyword 중복 index, 모든 근거 보존,
+canonical alias/부모 기술 비추론, 결정성·버전·입력 불변·결과 객체 독립성,
+네 품질 상태·미지원 기술·비기술 조건·잘못된 입력 실패를 검증한다.
+Phase 3A XML fixture를 실제 parser로 읽고 파생 추출해도 원문이 동일함을 확인했다.
+
+초기 테스트에서 `필수가 아닙니다`의 활용형을 놓쳐 required 섹션이 잘못 유지되는 실패를
+확인했다. 부정 패턴을 보완하고 해당 회귀 사례를 그대로 통과시켰다. 운영 검토에서
+일반적인 `필요합니다`/`반드시`/`plus`만으로 보유 조건을 추정하지 않도록 범위를 제한했다.
+회의 참석/지원서 의무와 기술 보유 조건이 혼동되는 명백한 사례도 미분류로 남긴다.
+테스트 기대값을 오분류에 맞춰 낮추지 않았다.
+
+### application·원문·기존 동작 보존
+
+새 pipeline 조회 테스트는 실제 임시 SQLite로 수행한다. 상세 연결이 닫힌 뒤 추출이 시작되고
+별도 writer가 즉시 잠금을 얻을 수 있음을 확인했다. 추출 전후 DB dump는 동일하다.
+성공 raw refresh 뒤 최신 원문·fetched_at을 읽어 stale 요건 없이 재계산하며, 실패 refresh 뒤에는
+이전 raw와 같은 파생 결과가 남는다. 추출 오류를 주입해도 최신 raw·전체 DB·이전 반환 객체가
+보존되고 오류가 호출자에게 전달된다. source별 같은 ID와 부모 삭제도 독립적이다.
+
+`inspect_requirements.py`는 실제 main/인수 파서와 pipeline을 연결해 JSON provenance 및
+detail_not_fetched 상태를 검증했다. Streamlit은 수정·실행하지 않았다. 새 추출 테스트는
+HTTP와 SQLite 접근을 차단하고, application 테스트는 HTTP를 차단한다. 실 네트워크·Work24 키·
+사용자 DB는 필요 없다. Work24 client/storage/migrations/시장 extractor/taxonomy/normalizer/
+classifier/analyzer/recommender의 운영 코드는 변경하지 않았다.
+
+샘플은 12건, 데이터 분석가 6/ML 3/데이터 엔지니어 2/BI 1이다. 기술 집계와 추천
+Python(5/6) → A/B Test(2/6) → Tableau(2/6) → Statistics(1/6) → GA4(1/6)는 기존과 같다.
+상세 required-only로 시장 집계를 바꾸지 않았다.
+
+### 남은 한계
+
+합성 fixture와 지정 경계의 통과를 실제 공고 전체의 정확도로 주장하지 않는다. 복잡한 부정,
+문장 간 참조, 임의 제목/서식, HTML/표, 동의어·미지원 기술, 여러 대상의 단서 범위는 제한적이다.
+보수적인 규칙은 실제 요건도 unspecified로 남길 수 있다. 별도 정밀도/재현율 평가는 하지 않았다.
+raw free text와 추출 근거에 대한 자동 개인정보 정제도 없다.
+
+파생 데이터는 저장하지 않아 이전 버전 결과의 역사 조회나 SQL 근거 검색은 제공하지 않는다.
+같은 원문·현재 taxonomy·추출기 버전 1에서 결정적으로 재계산한다. schema v2와 기존 migration/
+백업 정책을 유지한다. raw 원문을 파괴하지 않으므로 후속 규칙 개선 후 재처리할 수 있다.
+프로필·매칭·점수·LLM·지원 추적은 없으며 **Phase 4 이상은 시작하지 않았다**.

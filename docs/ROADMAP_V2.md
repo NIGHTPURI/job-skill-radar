@@ -1,6 +1,6 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
-상태: Phase 0·1A·1B·1C·2A·2B·2C·2D·3A 완료. **Phase 3B는 시작하지 않았다.** 아래 단계별 완료 기록이 과거 제안보다 우선한다.
+상태: Phase 0·1A·1B·1C·2A·2B·2C·2D·3A·3B 완료. **Phase 4 이상은 시작하지 않았다.** 아래 단계별 완료 기록이 과거 제안보다 우선한다.
 근거는 [REFACTORING_AUDIT.md](REFACTORING_AUDIT.md), 목표 경계는 [TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md)에 있다.
 
 ## 공통 완료 조건
@@ -145,6 +145,25 @@
   필수/우대·자격 해석, LLM, job-fit, 프로필·북마크·지원 추적은 이번 범위에 없다.
 - 실 API smoke는 하지 않았다. 실제 키 권한·응답 변종·요청 한도는 후속 실환경 검증 사항이다.
   TTL·재시도·snapshot·영속 실패 이력·상세 UI는 도입하지 않았다. Phase 3B는 미시작이다.
+
+## Phase 3B 완료 기록 — Structured Requirements and Data Quality (2026-09-17)
+
+- 순수 `extract_requirements` API와 TypedDict 계약을 추가했다. 기존 taxonomy로 검출하고
+  required/preferred/responsibility/unspecified, 원문 위치·섹션·규칙 근거, 추출기 버전 1을 반환한다.
+- Work24 우대 필드는 기본 preferred이며 본문·자격·컴퓨터 활용 필드는 명시적 문맥만 분류한다.
+  keyword는 항상 unspecified다. 부정·충돌·대안·모호한 복합 문장은 긍정 필수로 확정하지 않는다.
+- 기술별 대표 우선순위는 required > preferred > responsibility > unspecified이며 모든 근거를 보존한다.
+  상세 없음·근거 미검출·기술 분류됨·근거 있으나 미분류를 구별한다. 빈 required는 요건 부재가 아니다.
+- 경력·학력·고용형태·근무지 원문에 missing/not_interpreted/normalized 상태를 제공한다.
+  경력의 제한된 완전 일치 범주 외에 연차·학위·지역 제한·급여를 해석하지 않는다.
+- 조회 시 원문에서 재계산하므로 파생 persistence와 migration은 도입하지 않았다. schema v2 유지.
+  DB 연결 종료 후 추출하며 원문 보존·실패한 갱신·추출 오류 전파·source identity를 검증했다.
+- pipeline 조회 API와 `inspect_requirements.py` CLI를 제공한다. 기존 수집·Streamlit·시장 분석·추천은 유지한다.
+- 18개 수동 기대값을 가진 합성 평가 사례와 순수/application 테스트를 추가했다.
+  [검증 결과](TEST_BASELINE.md#phase-3b-검증-2026-09-17)와
+  [상세 계약·한계](02_data_design.md#phase-3b-구조화-요건과-데이터-품질-계약)를 따른다.
+- 실공고 코퍼스 정확도·일반 문법·복잡한 부정 범위·HTML 표·미지원 기술 해석은 보장하지 않는다.
+  candidate/job-fit/확률/LLM/프로필/지원 추적은 구현하지 않았다. Phase 4 이상은 미시작이다.
 
 ## 원래 Phase 2 계획 — 저장 일관성과 수집 관측 기반 (과거 제안)
 
@@ -316,9 +335,9 @@
 
 ## 바로 다음 작업 제안
 
-**Phase 3A는 완료했다. Phase 3B는 시작하지 않는다.** 후속 요청에서 상세 원문을 사용할 범위와
-해석 계약을 확정해야 한다. 원문·미수집·실패·선택 필드 결측을 구별하고, raw 경력과 normalized
-career의 우선순위를 조용히 도입하지 않는다. 최초 DB 이전은 다른 writer를 중지한 상태에서
-수행하고 백업·복원 절차는 데이터 설계를 따른다.
+**Phase 3B는 완료했다. 다음 단계는 시작하지 않는다.** 후속 요청에서 매칭/표시 범위와 미분류·
+상충 근거·대안 조건의 처리 정책을 정해야 한다. required 빈 목록을 요건 없음으로 해석하거나
+원문과 정규화 목록 값의 우선순위를 조용히 도입하지 않는다. 실공고 수동 평가로 오분류/누락을
+확인한 뒤 소비 범위를 확대해야 한다. 최초 DB 이전은 기존 백업·복원 운영 정책을 따른다.
 
 Phase 1C 저장 무결성, Phase 2A 추출, Phase 2B 분류, Phase 2C 추천 회귀 테스트가 현재 기준선이다. 추천은 학습 후보 순서이며 공고별 적합도가 아니다. 후속 소비자는 제거된 score 키 대신 명시적 근거 계약을 사용해야 한다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.

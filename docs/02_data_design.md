@@ -1,9 +1,154 @@
 # 데이터 설계
 
+## Phase 3B 구조화 요건과 데이터 품질 계약
+
+2026-09-17 기준. `requirement_extractor.extract_requirements(detail)`은 저장/파싱된 상세 원문
+또는 `None`을 받는 순수 함수다. 입력을 수정하지 않고 HTTP·SQLite·UI·환경·현재 시각을
+사용하지 않는다. Work24 raw evidence의 모든 저장 필드는 유지한다. 기존 시장 분석과
+새 요구사항 추출은 별도 결과이며, 공고별 매칭·사용자 점수·LLM은 구현하지 않았다.
+
+### 분류와 필드별 범위
+
+| 분류 | 의미와 판정 근거 |
+|---|---|
+| required | 명시적인 자격/필수 섹션 또는 같은 원문 조각의 필수·required·mandatory·must have 단서 |
+| preferred | 우대 섹션/필드 또는 우대·preferred·nice to have·경험이 plus라는 단서 |
+| responsibility | 업무 섹션 또는 개발·운영·관리·배포·구축·유지보수/build/develop/maintain/operate/deploy/manage 동작 |
+| unspecified | 기술은 있지만 위 근거가 없거나 부정·조건·충돌·범위가 불명확함 |
+
+`required`는 지원자가 이미 기술을 보유해야 한다는 명시적 맥락이다. `job_content`에 있다는
+이유만으로 부여하지 않는다. `responsibility`도 사전 보유 의무를 뜻하지 않는다.
+단순 `경험`/experience만으로 업무나 필수를 추론하지 않는다. `반드시`는 경험·역량·지식·능력·
+보유·숙지와 함께, `필요합니다`는 경험·역량·지식·이해·능력과 함께 쓰인 경우만 필수 단서다.
+`plus`는 경험 또는 `is a plus` 맥락이어야 한다. 회의·지원서·서류·이력서·면접 등의 의무와
+기술 보유 의무가 섞이면 보수적으로 unspecified다.
+
+| 출처 필드 | 처리 |
+|---|---|
+| job_content | 섹션/문장 단서로 분류. 기본 unspecified |
+| preferred_conditions, other_preferred_conditions | 기본 preferred. 명시적 필수·업무·중립 섹션은 우선하며 부정·모호성은 unspecified |
+| certificate, computer_skill | 기본 unspecified. 명시적 단서만 분류. 기술로 매핑되지 않는 원문도 검토 근거로 보존 |
+| other_information | 본문과 같은 제한된 규칙. 기본 unspecified |
+| keywords | 검색 메타데이터. 항목에 required라는 단어가 있어도 항상 unspecified |
+| raw_career_condition, education, employment_type, work_region | 아래 비기술 조건 계약. 기술 추출에는 사용하지 않음 |
+| 그 밖의 상세 필드 | raw 저장만 유지. 급여·URL·복리후생·접수방법 등에서 기술 요건을 만들지 않음 |
+
+기술 검출은 기존 `extract_skills`와 59개 canonical taxonomy를 그대로 사용한다.
+springboot→Spring Boot, postgres→PostgreSQL, k8s→Kubernetes 등 alias와 긴 겹침 우선 정책을
+재사용한다. Spring Boot→Spring/MVC/Security, JPA→Hibernate, AWS→Docker 등의 추론은 없다.
+
+### 작은 섹션 파서와 단서 범위
+
+행 전체 또는 콜론 앞 label이 다음 목록과 정확히 일치할 때만 섹션이다. 영어 대소문자와
+연속 공백을 정리해 비교하되 원문은 바꾸지 않는다.
+
+- 필수: 자격요건, 지원자격, 필수요건, 필수사항, 필수, Requirements, Required, Required skills, Must have.
+- 우대: 우대사항, 우대조건, 우대, Preferred, Preferred skills, Nice to have, Nice-to-have.
+- 업무: 주요업무, 담당업무, 업무내용, Responsibilities, Duties.
+- 중립: 기술스택, 사용 기술, Tech stack, Technologies, 복리후생, 혜택, 전형절차, 회사소개, Benefits, About us.
+
+`[제목]`, `【제목】`, `**제목**`, Markdown # 제목, 번호·일부 bullet, `:`/`：`를 지원한다.
+빈 줄은 상태를 유지하고 다른 제목은 상태를 바꾼다. 모르는 장식 제목·콜론 label·HTML/표 형식은
+기존 필수/우대 범위를 중립으로 끊는다. 기술이 포함된 알 수 없는 제목은 기술 언급을 버리지 않는다.
+일반 문장의 Requirements/주요업무라는 단어만으로 다음 줄까지 섹션 상태를 만들지 않는다.
+필드가 바뀌면 모든 섹션 상태를 초기화한다.
+
+각 행을 쉼표·세미콜론·문장부호 뒤 공백으로 나눈다. 분류는 **그 조각 안**의 단서만 사용한다.
+따라서 `Java required, Python`의 Python은 unspecified다. `Required skills: Java, Python`은
+명시적인 섹션 범위라 둘 다 required다. 콜론 없는 `Must have Java, Python`에서는 Java만 required다.
+이는 문법적 나열 범위를 넓게 추정하지 않기 위한 의도적인 누락이다.
+
+판정 순서는 부정 → 불확실성 → 같은 조각의 필수/우대 충돌 → 비기술 의무/대안·복합 범위 모호성
+→ 명시 필수/우대 → 섹션 → 우대 필드 → 업무 동작 → 단순 언급이다.
+부정은 필수 아님/필수가 아닙니다/요구하지 않음/없어도/불필요/경험 무관, not required,
+do not require, no experience required, without experience, optional 등의 제한된 패턴이다.
+부정은 긍정 요건을 생성하지 않으며 `unspecified`와 `negated` 규칙 코드로 근거를 남긴다.
+질문·인용·조건·여부/미정/검토/협의, required와 preferred의 동시 단서는 확정하지 않는다.
+or/또는/중 하나 같은 대안은 개별 필수 조건으로 바꾸지 않는다. 여러 기술과 명시 단서를
+and/및 등으로 연결한 복합 조각도 적용 범위가 모호하면 unspecified다.
+
+### provenance와 집계
+
+결과 `RequirementExtraction`에는 `extractor_version=1`, source/posting_id,
+`detail_fetched_at`, `quality_status`, `skills`, `unclassified_evidence`, `conditions`가 있다.
+`detail_fetched_at`은 입력에 있으면 그대로 복사하고 파서 원문처럼 없으면 None이다.
+새 관측 시각이나 confidence/점수는 만들지 않는다.
+
+각 SkillRequirement는 canonical `skill`, 대표 `requirement_type`, 전체 `evidence` 목록을 갖는다.
+각 근거에는 source_field, keywords의 source_index(나머지 None), evidence_text,
+evidence_start/end, section_heading/section_start, 해당 근거 자체의 requirement_type, rule이 있다.
+offset은 **입력 필드 문자열의 Python 문자 slice**이며 byte/XML/기술명 위치가 아니다.
+keywords에서는 해당 항목 내부의 offset이다. `field[start:end] == evidence_text`가 성립한다.
+섹션 제목도 원문 그대로와 시작 위치를 남기므로 제목 기반 분류 이유를 검토할 수 있다.
+
+대표 분류는 독립 근거 사이에서 **required > preferred > responsibility > unspecified**다.
+같은 조각의 상충 단서를 이 우선순위로 강제 해소하지 않는다. 반복 행·다른 필드·중복 keyword는
+각기 다른 위치 근거로 모두 남는다. 한 조각 안에서 같은 기술/alias가 반복되면 그 전체 조각을
+한 근거로 남긴다. 서로 다른 긍정/부정 근거가 있으면 대표값만으로 충돌을 판단하지 말고
+근거 목록을 함께 확인해야 한다.
+
+기술 출력은 기존 taxonomy 순서, 근거는 명시한 필드 순서와 원문 위치 순서다. dict 입력 순서나
+set 순회에 의존하지 않는다. `unclassified_evidence`는 qualification 단서가 있지만 canonical
+기술로 매핑되지 않은 문장, 모호/부정 문장, 자격·컴퓨터 활용·keyword의 미매핑 내용을 보존한다.
+그 안의 requirement_type은 문맥 분류일 수 있으며 기술 해석을 완료했다는 뜻이 아니다.
+이미 기술에 연결된 unspecified 근거는 각 기술의 evidence에 있어 별도 목록에 중복하지 않는다.
+
+### 품질과 비기술 조건
+
+| quality_status | 의미 |
+|---|---|
+| detail_not_fetched | 전달/저장된 성공 상세가 현재 없음 |
+| detail_fetched_but_no_requirement_evidence | 지원하는 필드·규칙에서 기술/요건 근거를 관측하지 못함 |
+| requirements_extracted | 하나 이상의 기술에 required/preferred/responsibility 근거가 있음 |
+| requirement_evidence_present_but_unclassified | unspecified 기술, 미매핑 요건, 또는 비기술 조건 원문은 있지만 위의 기술 분류가 없음 |
+
+`requirements_extracted`에도 미분류·미매핑 근거가 함께 있을 수 있다. 어느 상태도 공고 전체의
+완전성 보증이 아니다. 특히 required 기술이 비었다고 **고용주의 필수 기술이 없다**고 해석하면 안 된다.
+taxonomy 밖의 기술 이름만 있는 문장은 단서까지 없으면 검출되지 않을 수 있다.
+
+조건 4개는 source_field/raw_text/status/normalized_value로 반환한다. 상태는 missing,
+not_interpreted, normalized다. 정확한 경력 범주(신입, 경력, 무관, 경력무관, 관계없음,
+신입/경력 등 제한된 완전 일치 표현)만 기존 normalize_career에 전달한다.
+예: 원문 경력무관을 그대로 두고 파생 normalized_value=무관을 반환한다.
+경력 3년 이상 같은 연차·복합 조건, 학력·고용형태·근무지는 원문과 미해석 상태만 유지한다.
+숫자 연차·학위·위치 제한·급여 기준은 생성하지 않고 기존 목록 career/region도 덮어쓰지 않는다.
+
+### 저장 결정·재처리·application 경계
+
+파생 요건은 **영속화하지 않는다**. 현재는 단일 공고 검토이며 순수 재계산으로 충분하고,
+독립 SQL 조회나 매칭용 반복 집계 소비자는 아직 없다. 원문이 이미 보존되므로 이 단계에서
+파생 cache·추가 transaction·version별 stale row를 만들 필요가 없다. schema는 **v2** 그대로이며
+storage/migrations/백업 정책에 변경이 없다.
+
+`pipeline.load_posting_requirements(source, posting_id, db_path=...)`는 상세 path reader가
+연결을 닫은 뒤 순수 추출한다. 기존 schema-on-read 동작은 유지한다. 수집 중 자동 추출은 하지
+않으며 기존 Phase 3A 수집 결과·실패 보존 계약을 바꾸지 않는다. 성공 refresh 후 조회는 최신
+원문에서 재계산하고, 실패 refresh 후 조회는 보존된 원문에서 같은 결과를 반환한다.
+추출 오류는 호출자에게 전파하며 빈 성공 결과로 바꾸지 않는다. DB와 이전 반환 객체는 손대지 않는다.
+
+`REQUIREMENT_EXTRACTOR_VERSION = 1`은 전체 결과와 그 안의 근거에 공통 적용된다.
+같은 원문·현재 taxonomy·규칙 버전에서는 같은 결과다. 재호출은 새 결과를 만들며 이전 요건을
+누적하지 않는다. 향후 규칙/taxonomy 변경으로 출력 의미가 바뀌면 version 갱신을 검토해야 한다.
+자동 version migration framework나 별도 taxonomy 복제는 없다.
+
+검토용 CLI는 `python -B scripts/inspect_requirements.py --source work24 --posting-id ID --db-path PATH`다.
+JSON으로 네 범주·원문 근거·품질·비기술 조건을 확인한다. HTTP·키가 필요 없으며 누락 상세도
+명시적인 상태로 반환한다. 실패는 비정상 종료로 드러난다. Streamlit 화면은 변경하지 않았다.
+기존 analyzer/recommender의 시장 언급 수·분모·추천은 그대로다.
+
+### 지원 한계
+
+일반 한국어 문법·복잡한 부정 범위·인용/가정·문장 사이 대명사·서식 없는 알 수 없는 제목은
+완전히 해석하지 않는다. HTML/표를 해석하거나 임의 제목을 추측하지 않는다. 한 조각 안에서
+서로 다른 대상을 수식하는 단서, 장문 조건·예외·대안 그룹은 오분류/누락 여지가 있다.
+`Java and SQL required`처럼 실제로 둘 다 필수인 문장도 보수적으로 미분류될 수 있다.
+섹션 밖 `Java experience essential`처럼 등록하지 않은 동의어는 unspecified다.
+합성 평가 세트 통과는 실공고 정확도/재현율 보증이 아니다. 미래 매칭 전에 별도 수동 검토
+코퍼스와 미분류·충돌 처리 정책이 필요하다. Phase 4 이상은 시작하지 않았다.
+
 ## Phase 3A 상세 원문과 schema v2 계약
 
-2026-09-16 기준. Phase 3A는 공식 Work24 상세 수집과 신뢰할 수 있는 저장까지 완료했다.
-아래 계약이 과거 schema v1 설명보다 우선한다. Phase 3B는 시작하지 않았다.
+2026-09-16 Phase 3A 완료 당시 기록. 아래 raw 저장 계약은 유지하며 현재의 파생 추출은 위 Phase 3B 계약을 따른다.
 
 ### 공식 API 경계와 원문 의미
 

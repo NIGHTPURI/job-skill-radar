@@ -1,0 +1,128 @@
+[
+  {
+    "id": "korean_required_section",
+    "review_note": "A qualification heading scopes both following lines across a blank line.",
+    "detail": {"job_content": "[자격요건]\n- Java 경험\n\n- SQL 역량"},
+    "expected": {"Java": "required", "SQL": "required"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "korean_preferred_fields",
+    "review_note": "Field semantics supply preference even without an inline cue.",
+    "detail": {"preferred_conditions": "Kafka 경험", "other_preferred_conditions": "Redis 사용 경험"},
+    "expected": {"Kafka": "preferred", "Redis": "preferred"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "responsibility_section",
+    "review_note": "Actual duties are relevant work, not mandatory prior knowledge.",
+    "detail": {"job_content": "주요업무：\nJava/Spring Boot 기반 API 개발\nKafka 데이터 파이프라인 운영\nAWS 환경 서비스 배포"},
+    "expected": {"Java": "responsibility", "Spring Boot": "responsibility", "Kafka": "responsibility", "AWS": "responsibility"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "english_sections",
+    "review_note": "Exact Markdown headings change scope; preference does not inherit required.",
+    "detail": {"job_content": "## Requirements\nPython experience\n## Nice-to-have\nDocker experience\n## Responsibilities\nMaintain services with PostgreSQL"},
+    "expected": {"Python": "required", "Docker": "preferred", "PostgreSQL": "responsibility"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "inline_cues_without_headings",
+    "review_note": "Each independent line provides an explicit qualification cue.",
+    "detail": {"job_content": "Java 경험 필수\nSpring Boot 사용 경험이 필요합니다\nSQL 역량 필수\nMust have Python experience\nKubernetes experience required\nKafka 경험자 우대\nAWS 경험 우대\nRedis 사용 경험은 plus\nDocker experience preferred"},
+    "expected": {"Java": "required", "Spring Boot": "required", "SQL": "required", "Python": "required", "Kubernetes": "required", "Kafka": "preferred", "AWS": "preferred", "Redis": "preferred", "Docker": "preferred"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "stack_is_not_qualification",
+    "review_note": "A stack label and discovery metadata do not assert applicant requirements.",
+    "detail": {"job_content": "기술스택: Java, Spring Boot, MySQL\nJava / Kotlin / Python\n사용 기술: Docker", "keywords": ["AWS", "Kubernetes required"]},
+    "expected": {"Java": "unspecified", "Spring Boot": "unspecified", "MySQL": "unspecified", "Kotlin": "unspecified", "Python": "unspecified", "Docker": "unspecified", "AWS": "unspecified", "Kubernetes": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified"
+  },
+  {
+    "id": "negation_overrides_required_section",
+    "review_note": "All four negative statements remain visible but never positive qualifications.",
+    "detail": {"job_content": "필수요건\nAWS 경험은 필수가 아닙니다\nKubernetes 경험 없어도 지원 가능\nPython 경험은 요구하지 않습니다\nDocker experience is not required"},
+    "expected": {"AWS": "unspecified", "Kubernetes": "unspecified", "Python": "unspecified", "Docker": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified"
+  },
+  {
+    "id": "duplicate_skill_across_sections",
+    "review_note": "Required is the display summary, while every source occurrence remains evidence.",
+    "detail": {"job_content": "담당업무\nJava 기반 API 개발\n자격요건\nJava 경험\n우대사항\nJava 프로젝트 경험", "keywords": ["Java", "Java"]},
+    "expected": {"Java": "required"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "spring_overlap",
+    "review_note": "A separate Spring mention counts; Spring Boot does not imply it or any siblings.",
+    "detail": {"job_content": "Spring Boot 경험 필수\nSpring 경험 우대"},
+    "expected": {"Spring Boot": "required", "Spring": "preferred"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "canonical_aliases",
+    "review_note": "Existing aliases are reused without ecosystem inference.",
+    "detail": {"other_preferred_conditions": "springboot, postgres, k8s, JPA"},
+    "expected": {"Spring Boot": "preferred", "PostgreSQL": "preferred", "Kubernetes": "preferred", "JPA": "preferred"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "no_technology_or_qualification",
+    "review_note": "General posting text yields no observed requirement evidence, not proof of no requirements.",
+    "detail": {"job_content": "작은 팀을 소개합니다.\n함께 성장하는 문화를 지향합니다."},
+    "expected": {},
+    "quality": "detail_fetched_but_no_requirement_evidence"
+  },
+  {
+    "id": "nontechnical_qualification",
+    "review_note": "An explicit condition with no known canonical technology remains unclassified evidence.",
+    "detail": {"job_content": "지원자격\n팀과 원활하게 소통할 수 있는 분"},
+    "expected": {},
+    "quality": "requirement_evidence_present_but_unclassified"
+  },
+  {
+    "id": "ambiguous_mentions",
+    "review_note": "Experience alone and a technology under consideration prove no requirement.",
+    "detail": {"job_content": "Java 경험\nDocker 도입 여부 검토\nKubernetes is nice to have"},
+    "expected": {"Java": "unspecified", "Docker": "unspecified", "Kubernetes": "preferred"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "unknown_heading_boundary",
+    "review_note": "Unknown formatted headings terminate required scope conservatively.",
+    "detail": {"job_content": "Requirements\nJava\n## Our environment\nPython\n[참고사항]\nDocker"},
+    "expected": {"Java": "required", "Python": "unspecified", "Docker": "unspecified"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "odd_and_conflicting_format",
+    "review_note": "Combined labels, HTML and undecided wording are not reliable positive sections.",
+    "detail": {"job_content": "[필수/우대] Java 경험\n<b>Required Python</b>\nDocker 필수 여부 미정"},
+    "expected": {"Java": "unspecified", "Python": "unspecified", "Docker": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified"
+  },
+  {
+    "id": "neutral_section_resets_scope",
+    "review_note": "Stack and benefits headings stop qualification inheritance.",
+    "detail": {"job_content": "자격요건: Java\n기술스택: Docker\n복리후생\nPython 도서 제공"},
+    "expected": {"Java": "required", "Docker": "unspecified", "Python": "unspecified"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "certificate_and_computer_skill",
+    "review_note": "Neither field is inherently required; explicit preference/requirement can still apply.",
+    "detail": {"certificate": "AWS certification", "computer_skill": "SQL 역량 필수; Excel 경험 우대"},
+    "expected": {"AWS": "unspecified", "SQL": "required", "Excel": "preferred"},
+    "quality": "requirements_extracted"
+  },
+  {
+    "id": "mixed_inline_clauses",
+    "review_note": "Local clause cues override field context; commas never spread a cue to its neighbor.",
+    "detail": {"job_content": "Java required, Python; Docker experience preferred. AWS 경험 없어도 지원 가능", "preferred_conditions": "SQL 필수"},
+    "expected": {"Java": "required", "Python": "unspecified", "Docker": "preferred", "AWS": "unspecified", "SQL": "required"},
+    "quality": "requirements_extracted"
+  }
+]

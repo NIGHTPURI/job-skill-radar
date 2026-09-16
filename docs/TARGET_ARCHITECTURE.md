@@ -1,12 +1,39 @@
 # Target Architecture — 개인용 Job Intelligence
 
-최신 상태: Phase 3A 공식 Work24 상세 수집·schema v2 저장을 완료했다(2026-09-16).
-Phase 2A 기술 추출·2B 분류·2C 추천·2D 경력 정규화는 유지한다. Phase 3B는 미시작이다.
-최신 계약은 [데이터 설계](02_data_design.md#phase-3a-상세-원문과-schema-v2-계약),
-검증은 [테스트 기준선](TEST_BASELINE.md#phase-3a-검증-2026-09-16)을 따른다.
+최신 상태: Phase 3B 구조화 요건 추출·데이터 품질을 완료했다(2026-09-17).
+Phase 3A 원문 수집·schema v2와 기존 시장 추출·분류·추천·경력 정규화는 유지한다.
+최신 계약은 [데이터 설계](02_data_design.md#phase-3b-구조화-요건과-데이터-품질-계약),
+검증은 [테스트 기준선](TEST_BASELINE.md#phase-3b-검증-2026-09-17)을 따른다. Phase 4 이상은 미시작이다.
 아래 이전 단계 기록과 장기 구조는 당시 현황·설계 제안이다.
 
 Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다. Phase 1C 저장 무결성·마이그레이션 계약은 계속 유지한다.
+
+## Phase 3B 실제 구현 경계
+
+`requirement_extractor.py`가 기존 `extract_skills`/taxonomy를 사용하는 순수 추출 함수다.
+제한된 행·섹션 문맥을 required/preferred/responsibility/unspecified로 분류한다. 원문·위치·섹션·
+규칙 코드를 유지하고 canonical 기술별로 대표 분류와 전체 근거를 모은다. model 계약은 기존
+TypedDict 형식이다. 추출기 버전 1과 네 품질 상태, 네 비기술 원문 조건도 별도로 반환한다.
+
+```text
+inspect_requirements.py / application caller
+  → pipeline.load_posting_requirements(source, posting_id, db_path)
+    → storage.load_posting_detail_from_db → close connection
+    → extract_requirements(detail or None)
+      → source sections/clauses + existing canonical skill detection
+      → local classification + all evidence + deterministic aggregation
+      → quality status + minimally interpreted source conditions
+```
+
+단일 공고의 근거 검토는 저장된 raw detail에서 재계산하므로 파생 테이블/cache는 도입하지 않았다.
+schema v2·v0/v1 이전·백업·FK는 그대로다. 규칙 변경 뒤 재호출하면 새 버전 결과를 얻는다.
+성공 refresh 뒤에는 새 원문, 실패 refresh 뒤에는 기존 원문을 사용한다. 추출 오류는 전파하고
+raw DB나 이전 반환값을 수정하지 않는다. 추출 중 DB 연결·HTTP 요청을 유지하지 않는다.
+
+기존 수집 함수와 시장 analyzer/recommender는 새 파생값을 사용하지 않는다.
+필수 기술 수가 비었다는 사실을 고용주 요건 부재로 해석하지 않는다. 미지원 기술·부정·대안·
+복잡한 문맥은 원문 검토가 필요하다. Streamlit은 변경하지 않고 작은 JSON 검사 CLI만 추가했다.
+job matching·점수·프로필·LLM·Phase 4 이상은 없다.
 
 ## Phase 3A 실제 구현 경계
 
