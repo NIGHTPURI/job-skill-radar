@@ -89,7 +89,7 @@ class ManualWorkflowTest(unittest.TestCase):
         self.assertEqual(review['requirements']['groups'], [])
         with closing(storage.connect(self.path)) as conn:
             self.assertEqual(conn.execute('SELECT created_at FROM job_postings').fetchone(), created)
-            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 2)
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 3)
 
     def test_work24_edit_rejected_even_with_same_posting_id(self):
         identity = self.create(id_factory=lambda: 'shared')

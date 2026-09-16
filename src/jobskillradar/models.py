@@ -173,3 +173,14 @@ class RequirementExtraction(TypedDict):
     groups: list[RequirementGroup]
     unclassified_evidence: list[RequirementEvidence]
     conditions: list[SourceCondition]
+
+
+class ProfileValues(TypedDict):
+    owned_skills: list[str]
+    target_roles: list[str]
+    preferred_regions: list[str]
+    required_regions: list[str]
+
+
+class LocalProfile(ProfileValues):
+    revision: int

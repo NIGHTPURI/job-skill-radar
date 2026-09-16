@@ -1,5 +1,15 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
+## Phase 5 완료 기록 — Local User Profile and Preferences (2026-09-17)
+
+- Phase 4A 8d0fb7a push/clean 뒤 시작했다. OS 시간 확인상 3시간 이상 여유가 있었다.
+- 단일 현재 프로필: 보유 기술, 복수 목표 직무, 지역 선호/필수 조건을 구분해 저장한다.
+- alias/중복/순서는 동일 의미로 처리하고 알려지지 않은 기술은 보존한다. 의미 변경만 revision 증가.
+- schema v3 singleton 테이블 추가. v0/v1/v2/fresh→v3, 기존 행 정확 보존, rollback/백업/재개방 검증.
+- ‘내 프로필’ UI 저장·재시작·수정과 시장 추천 기본값을 연결했다. 시장 집계/추천 규칙은 그대로다.
+- 전체 367개 및 Phase 3C fixture gate 통과. 새 프로필 관련 22개(순수/저장 11, 이전 8, UI 3).
+- 매칭·점수·프로필 이력·고용형태/연차 해석은 이 단계에 포함하지 않았다.
+
 ## Phase 4A 완료 기록 — Manual Job Posting Workflow (2026-09-17)
 
 - 시작 212ad8d, clean, 328 tests 및 requirement 평가 통과. 수동 공고는 manual/UUID를 사용한다.

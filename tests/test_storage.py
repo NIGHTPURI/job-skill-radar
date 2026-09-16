@@ -47,7 +47,7 @@ class StorageRegressionTest(unittest.TestCase):
         ensure_schema(self.conn)
         ensure_schema(self.conn)
         tables = self.conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
-        self.assertEqual(tables, [("job_postings",), ("posting_details",), ("posting_skills",)])
+        self.assertEqual(tables, [("job_postings",), ("posting_details",), ("posting_skills",), ("user_profile",)])
         for table, expected in [("job_postings", {"source": 1, "posting_id": 2}),
                                 ("posting_skills", {"source": 1, "posting_id": 2, "skill": 3})]:
             columns = self.conn.execute(f"PRAGMA table_info({table})").fetchall()

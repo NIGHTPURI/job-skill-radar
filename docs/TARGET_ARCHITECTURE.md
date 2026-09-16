@@ -1,5 +1,15 @@
 # Target Architecture — 개인용 Job Intelligence
 
+## Phase 5 현재 구현 경계 (2026-09-17)
+
+현재 schema v3와 단일 로컬 프로필을 사용한다. profile.py는 기존 taxonomy/역할 기반 순수
+검증·정규화, profile_storage.py는 singleton 저장·revision, profile_ui.py는 편집 화면이다.
+app → pipeline load/save_profile → profile_storage 순이며 UI SQL·로그인·멀티유저는 없다.
+선호/필수 지역은 다른 필드이고 연차·고용 형태는 아직 해석하지 않는다. 파생 요건은 저장하지 않는다.
+v2→v3는 additive이고 기존 공고/raw 데이터와 FK를 그대로 유지한다. v0/v1 경로·사전 고유 백업·
+rollback·재개방도 검증했다. 상세 계약은 데이터 설계의 Phase 5 절을 따른다.
+이하 이전 단계의 schema v2/미시작 설명은 완료 당시 기록이다.
+
 ## Phase 4A 실제 구현 경계 (2026-09-17)
 
 현재 수동 공고 흐름은 app → review_ui → pipeline create/update/list/review → storage다.

@@ -1,5 +1,27 @@
 # Phase 1A — Regression Test Baseline
 
+## Phase 5 검증 (2026-09-17)
+
+Phase 4A 345개에서 **367개 전부 통과**. 실패/오류/expected failure/skip 0.
+신규 test_profile 11, test_profile_migrations 8, test_profile_ui 3이다.
+기존 schema 검사 기대값만 v3/프로필 테이블/pre-v3 백업명으로 갱신했으며 이전 assertions는
+삭제하지 않았다. 기존 migration 19개도 통과한다. 요건 평가 60/60·144/144·13/13, 필수/우대 FP 0.
+
+프로필 최초/재조회/수정/revision, 순서·alias·중복의 동일 의미, unknown 기술 보존, 복수 역할,
+빈 optional/빈 기술, 선호와 필수 구분, 검증 실패/SQL 실패 rollback, singleton 제약을 확인했다.
+수동/고용24 공고와 시장 결과가 프로필 저장으로 바뀌지 않는다. UI는 저장·새 세션·수정·draft
+보존·추천 기본값 및 임시 추천 입력이 프로필을 덮어쓰지 않음을 확인했다.
+
+v2 fixture에 manual/work24의 같은 ID·원문·키워드·created_at/fetched_at을 저장하고 공고 세
+테이블의 INSERT/UPDATE/DELETE를 막는 trigger를 설치해도 additive migration이 성공했다.
+v0/v1/v2에서 마지막 프로필 DDL 후 실패를 주입해 원래 dump/version으로 rollback됨을 검증한다.
+v2 백업의 정확한 dump/version/integrity·복사본 복원, 백업 실패 중단, 재시도 비덮어쓰기,
+현재 재개방의 백업 부재, fresh v3, source별 FK cascade도 통과했다. 사용자 실제 DB는 건드리지 않았다.
+
+전체 unittest·profile 집중 suite·평가 CLI·sample CLI·diff check와 bounded headless smoke를
+실행했다. AppTest에서는 v2 DB를 실제 앱 시작으로 이전한 뒤 재시작해도 백업이 늘지 않음을
+확인했다. 로컬 headless 서버는 health 확인 후 종료했다. API 키·실 Work24 네트워크는 불필요하다.
+
 ## Phase 4A 검증 (2026-09-17)
 
 212ad8d의 328개에서 **345개 전부 통과**로 확장했다. 실패/오류/expected failure/skip은 0.

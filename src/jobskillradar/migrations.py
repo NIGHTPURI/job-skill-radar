@@ -1,4 +1,4 @@
-"""Transactional SQLite upgrades v0 -> v1 -> v2, with pre-migration backups."""
+"""Transactional SQLite upgrades v0 -> v1 -> v2 -> v3, with pre-migration backups."""
 from __future__ import annotations
 
 import logging
@@ -10,7 +10,7 @@ from pathlib import Path
 from .models import DETAIL_FIELDS, POSTING_FIELDS
 from .skill_extractor import extract_skills
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 logger = logging.getLogger(__name__)
 
 
@@ -63,6 +63,9 @@ def _check_layout(conn: sqlite3.Connection, version: int) -> None:
     }
     if version >= 2:
         expected["posting_details"] = (set(DETAIL_FIELDS), ["source", "posting_id"])
+    if version >= 3:
+        expected["user_profile"] = ({"singleton", "revision", "owned_skills", "target_roles",
+                                     "preferred_regions", "required_regions"}, ["singleton"])
     for table, (names, primary_key) in expected.items():
         columns = conn.execute(f"PRAGMA table_info({table})").fetchall()
         keys = [row[1] for row in sorted(columns, key=lambda row: row[5]) if row[5]]
@@ -73,6 +76,7 @@ def _check_layout(conn: sqlite3.Connection, version: int) -> None:
                 "job_postings": {"source", "posting_id", "created_at"},
                 "posting_skills": {"source", "posting_id", "skill"},
                 "posting_details": {"source", "posting_id", "keywords", "fetched_at"},
+                "user_profile": {"revision", "owned_skills", "target_roles", "preferred_regions", "required_regions"},
             }[table]
             if not required <= {row[1] for row in columns if row[3]}:
                 raise RuntimeError(f"Missing NOT NULL constraints in {table}")
@@ -104,6 +108,15 @@ def _create_detail_table(conn: sqlite3.Connection) -> None:
                 REFERENCES job_postings(source, posting_id) ON DELETE CASCADE
         )
     """)
+
+
+def _create_profile_table(conn: sqlite3.Connection) -> None:
+    conn.execute("""CREATE TABLE user_profile (
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        revision INTEGER NOT NULL CHECK(revision >= 1),
+        owned_skills TEXT NOT NULL, target_roles TEXT NOT NULL,
+        preferred_regions TEXT NOT NULL, required_regions TEXT NOT NULL
+    )""")
 
 
 def _backup_database(conn: sqlite3.Connection) -> Path | None:
@@ -163,7 +176,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     if version == SCHEMA_VERSION:
         _check_layout(conn, version)
         return
-    if version not in (0, 1):
+    if version not in (0, 1, 2):
         raise RuntimeError(f"Unsupported schema version: {version}")
     if conn.in_transaction:
         raise RuntimeError("Schema initialization requires no active transaction")
@@ -179,7 +192,11 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         _check_layout(conn, 1)
         if "posting_details" in tables:
             raise RuntimeError("Unexpected posting_details table in v1; database left unchanged")
-    if legacy or version == 1:
+    elif version == 2:
+        _check_layout(conn, 2)
+    if "user_profile" in tables:
+        raise RuntimeError("Unexpected user_profile table before v3; database left unchanged")
+    if legacy or version in (1, 2):
         _backup_database(conn)
     conn.execute("BEGIN IMMEDIATE")
     report = None
@@ -189,16 +206,20 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         if locked_version == SCHEMA_VERSION:
             _check_layout(conn, SCHEMA_VERSION)
         else:
-            if locked_version not in (0, 1):
+            if locked_version not in (0, 1, 2):
                 raise RuntimeError(f"Unsupported schema version: {locked_version}")
             if locked_version == 0:
                 if legacy:
                     report = _migrate_legacy(conn)
                 else:
                     _create_tables(conn)
-            _check_layout(conn, 1)
-            # v1 -> v2 is additive: do not rewrite postings, skills or created_at.
-            _create_detail_table(conn)
+            if locked_version <= 1:
+                _check_layout(conn, 1)
+                # v1 -> v2 is additive: do not rewrite postings, skills or created_at.
+                _create_detail_table(conn)
+            _check_layout(conn, 2)
+            # v2 -> v3 is additive; all raw posting data stays untouched.
+            _create_profile_table(conn)
             _check_layout(conn, SCHEMA_VERSION)
             if conn.execute("PRAGMA foreign_key_check").fetchall():
                 raise RuntimeError("Foreign key validation failed")

@@ -42,7 +42,7 @@ class MigrationTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT created_at FROM job_postings").fetchone()[0], before["created_at"])
         self.assertEqual(self.conn.execute("SELECT source, posting_id, skill FROM posting_skills ORDER BY skill").fetchall(),
                          [("work24", "1", "Python"), ("work24", "1", "SQL")])
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 3)
         self.assertEqual(self.conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
 
     def test_multiple_postings_survive(self):
@@ -134,7 +134,7 @@ class MigrationTest(unittest.TestCase):
                 self.assertEqual(len(storage.load_postings_from_db(path)), 1)
             backups = list(Path(tmp).glob('*.bak'))
             self.assertEqual(len(backups), 1)
-            self.assertTrue(backups[0].name.startswith("legacy.sqlite.pre-v2-from-v0-"))
+            self.assertTrue(backups[0].name.startswith("legacy.sqlite.pre-v3-from-v0-"))
             backup = sqlite3.connect(backups[0])
             try:
                 self.assertEqual(list(backup.iterdump()), original)
@@ -175,7 +175,7 @@ class MigrationTest(unittest.TestCase):
         fresh = sqlite3.connect(":memory:")
         try:
             storage.ensure_schema(fresh)
-            self.assertEqual(fresh.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(fresh.execute("PRAGMA user_version").fetchone()[0], 3)
             self.assertEqual(fresh.execute("PRAGMA foreign_keys").fetchone()[0], 1)
             self.assertEqual(storage.save_postings(fresh, [{"source": "test", "posting_id": "1", "title": "SQL"}]), 1)
             self.assertEqual(storage.load_postings(fresh)[0]["title"], "SQL")
@@ -214,7 +214,7 @@ class DetailMigrationTest(unittest.TestCase):
                     BEGIN SELECT RAISE(ABORT, 'Existing rows must not be rewritten'); END""")
         storage.ensure_schema(self.conn)
         self.assertEqual(self.snapshot(), before)
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 3)
         self.assertEqual(self.conn.execute("PRAGMA foreign_key_check").fetchall(), [])
         for name, sql in schema:
             self.assertEqual(self.conn.execute("SELECT sql FROM sqlite_master WHERE name=?", (name,)).fetchone()[0], sql)
@@ -223,7 +223,7 @@ class DetailMigrationTest(unittest.TestCase):
     def test_v1_backup_is_recoverable_and_current_reopen_creates_no_backup(self):
         before = list(self.conn.iterdump())
         storage.ensure_schema(self.conn)
-        backups = list(Path(self.tmp.name).glob("v1.sqlite.pre-v2-from-v1-*.bak"))
+        backups = list(Path(self.tmp.name).glob("v1.sqlite.pre-v3-from-v1-*.bak"))
         self.assertEqual(len(backups), 1)
         backup_bytes = backups[0].read_bytes()
         backup = sqlite3.connect(backups[0])
@@ -287,7 +287,7 @@ class DetailMigrationTest(unittest.TestCase):
         self.assertEqual(storage.load_postings_from_db(path), [])
         conn = storage.connect(path)
         self.addCleanup(conn.close)
-        self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 3)
         columns = conn.execute("PRAGMA table_info(posting_details)").fetchall()
         self.assertEqual({row[1]: row[5] for row in columns if row[5]}, {"source": 1, "posting_id": 2})
         before = list(conn.iterdump())

@@ -16,6 +16,8 @@ from jobskillradar.config import get_db_path, get_work24_auth_key
 from jobskillradar.models import AnalysisResult
 from jobskillradar.pipeline import collect_work24_to_db, load_market_analysis as select_analysis, seed_sample_db
 from jobskillradar.review_ui import render_manual_create, render_posting_browser
+from jobskillradar.profile_ui import render_profile
+from jobskillradar.pipeline import load_profile
 from jobskillradar.recommender import recommend_skills
 from jobskillradar.role_classifier import UNKNOWN
 
@@ -29,15 +31,18 @@ def counter_frame(counter: Counter, name_col: str, value_col: str, limit: int | 
 
 
 @st.cache_data(ttl=60)
-def load_analysis(mode: str) -> tuple[AnalysisResult, str]:
-    return select_analysis(mode)
+def load_analysis(mode: str, db_path: Path) -> tuple[AnalysisResult, str]:
+    return select_analysis(mode, db_path=db_path)
 
 
 st.title("Job Skill Radar")
 
 if next_navigation := st.session_state.pop("next_navigation", None):
     st.session_state["navigation"] = next_navigation
-navigation = st.sidebar.radio("화면", ["공고 목록", "공고 직접 등록", "시장 분석"], key="navigation")
+navigation = st.sidebar.radio("화면", ["공고 목록", "공고 직접 등록", "내 프로필", "시장 분석"], key="navigation")
+if navigation == "내 프로필":
+    render_profile()
+    st.stop()
 if navigation == "공고 직접 등록":
     render_manual_create()
     st.stop()
@@ -78,7 +83,7 @@ with st.sidebar:
     if not api_key:
         st.info(".env 파일에 WORK24_AUTH_KEY를 넣으면 실제 공고 수집 버튼이 활성화됩니다.")
 
-analysis, source_label = load_analysis(data_mode)
+analysis, source_label = load_analysis(data_mode, get_db_path())
 postings = analysis["postings"]
 
 metric_cols = st.columns(5)
@@ -127,8 +132,13 @@ with region_col:
 
 st.subheader("학습 우선순위")
 st.caption("현재 분석한 공고의 기술 언급과 역할 기초 지식에 따른 학습 후보입니다. 합격 확률이나 공고별 적합도가 아닙니다.")
-target_role = st.selectbox("목표 직무", ROLE_LABELS)
-owned_raw = st.text_input("보유 기술", value="SQL", placeholder="예: SQL, Python, Tableau")
+profile = load_profile()
+profile_revision = profile["revision"] if profile else 0
+default_role = profile["target_roles"][0] if profile else ROLE_LABELS[0]
+target_role = st.selectbox("목표 직무", ROLE_LABELS, index=ROLE_LABELS.index(default_role), key=f"market_role_{profile_revision}")
+owned_raw = st.text_input("보유 기술", value=", ".join(profile["owned_skills"]) if profile else "SQL",
+                          placeholder="예: SQL, Python, Tableau", key=f"market_skills_{profile_revision}")
+st.caption("저장 프로필을 기본값으로 사용합니다. 이 화면의 임시 변경은 프로필에 저장하지 않습니다.")
 owned_skills = [skill.strip() for skill in owned_raw.split(",") if skill.strip()]
 
 recommendations = recommend_skills(target_role, owned_skills, analysis, limit=6)

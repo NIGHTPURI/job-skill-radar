@@ -1,5 +1,40 @@
 # 데이터 설계
 
+## Phase 5 로컬 프로필·schema v3 (2026-09-17)
+
+현재 schema는 **v3**다. 아래 v2 설명은 이전 단계 당시 기록이며 공고/raw 계약 자체는 유지한다.
+개인 프로필은 공고와 다른 수명의 데이터라 기존 공고 행에 넣지 않고 singleton `user_profile`
+테이블 하나를 추가했다. singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER
+NOT NULL CHECK(revision>=1), owned_skills/target_roles/preferred_regions/required_regions의
+NOT NULL JSON 배열 TEXT 네 개다. 계정·사용자 ID·프로필 이력·ORM은 없다.
+
+보유 기술은 기존 canonicalize_skills를 재사용한다. 알려진 alias는 통합하고 미지원 기술은
+원래 철자로 보존·표시한다. 목표 직무는 Unknown을 제외한 기존 역할에서 하나 이상 선택한다.
+네 목록은 의미상 집합으로 정렬·중복 제거한다. 순서·중복·알려진 alias 변경은 revision을 바꾸지
+않고, 의미가 바뀌면 원자적으로 1 증가한다. 최초 저장은 1이다. 동시 저장은 SQLite write lock으로
+직렬화하며 마지막으로 저장한 전체 프로필이 현재값이다. 미지원 기술의 철자 변경은 별도 변경이다.
+
+지역 **선호**와 **필수 조건**은 독립 목록이다. 각 목록의 복수 값은 그중 한 지역, 빈 목록은
+해당 선택/제약을 선언하지 않은 상태다. 지원 시·도 label만 받는다. 공고 지역을 fuzzy 변환하거나
+통근·재택·지역 포함 관계를 추측하지 않는다. 고용 형태·연차·학위 조건은 이번 프로필에 없다.
+향후 비교는 원문에 정확한 단일 시·도명이 있을 때만 확정하고 나머지는 unknown이어야 한다.
+
+v2→v3는 프로필 테이블만 추가하고 공고·기술·상세·created_at·fetched_at을 재작성하지 않는다.
+fresh→v3, v0→v1→v2→v3, v1→v2→v3, v2→v3를 한 migration transaction으로 지원한다.
+v0의 기술 재구성 정책은 기존 그대로다. 마지막 DDL 실패까지 이전 schema/data/version으로
+rollback한다. 알 수 없는 기존 user_profile 테이블은 덮어쓰지 않고 거절한다.
+
+파일 이전 전에 `<DB>.pre-v3-from-vN-<unique>.bak`을 SQLite backup API로 만든다. from-vN은
+백업에 들어 있는 schema다. 실패하면 migration을 중단하고 새 불완전 파일만 제거한다.
+fresh/in-memory/current v3는 migration 백업이 없고 재시도도 기존 백업을 덮어쓰지 않는다.
+최초 이전은 다른 writer/이전 앱을 종료한 뒤 수행한다. v2 앱으로 되돌릴 때는 v3 DB를 그대로
+열지 말고 앱을 모두 종료한 상태에서 이전 백업의 복사본을 복구·검증해야 한다.
+
+pipeline.load_profile/save_profile → profile_storage 경계를 사용한다. validation·alias 정규화는
+순수 profile 모듈에 있다. UI는 ‘내 프로필’에서 저장/재시작/수정하며 SQL을 실행하지 않는다.
+시장 학습 추천은 저장 프로필을 초기 입력으로만 사용하고 임시 수정은 프로필에 저장하지 않는다.
+시장 집계 캐시는 DB 경로도 key에 포함한다. 원문·요건 추출기 v2·그룹·시장 추천 규칙은 그대로다.
+
 ## Phase 4A 수동 공고 계약 (2026-09-17)
 
 최신 기능은 수동 등록·목록·상세·수정이다. 아래 이전 Phase의 미구현 표시는 당시 기록이다.

@@ -72,9 +72,9 @@ class RequirementPipelineTest(unittest.TestCase):
         self.assertEqual(new_result["detail_fetched_at"], "2026-09-18T00:00:00Z")
         self.assertEqual(classifications(old_result), {"Java": "required"})
         with closing(storage.connect(self.path)) as conn:
-            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 3)
             self.assertEqual(conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall(),
-                             [("job_postings",), ("posting_details",), ("posting_skills",)])
+                             [("job_postings",), ("posting_details",), ("posting_skills",), ("user_profile",)])
 
     def test_failed_detail_refresh_preserves_raw_and_recomputed_requirements(self):
         detail = source_detail(job_content="Java 필수")

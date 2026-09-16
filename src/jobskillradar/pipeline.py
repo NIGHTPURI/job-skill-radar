@@ -7,11 +7,13 @@ from uuid import uuid4
 
 from .analyzer import analyze_postings
 from .config import get_db_path
-from .models import AnalysisResult, CollectionResult, JobPosting, PostingDetail, RequirementExtraction
+from .models import AnalysisResult, CollectionResult, JobPosting, LocalProfile, PostingDetail, RequirementExtraction
 from .normalizer import clean_postings
 from .sample_data import SAMPLE_POSTINGS
 from .requirement_extractor import extract_requirements
 from .manual_postings import build_manual_posting
+from .profile import normalize_profile
+from .profile_storage import load_profile_from_db, save_profile_to_db
 from .storage import load_posting_bundle_from_db, save_manual_bundle_to_db
 from .storage import load_posting_detail_from_db, load_postings_from_db, save_posting_details_to_db, save_postings_to_db
 from .work24_client import Work24Error, fetch_posting_detail, fetch_work24_postings
@@ -92,6 +94,15 @@ def update_manual_posting(source: str, posting_id: str, *, db_path: Path | None 
         raise ValueError("Only manual postings can be edited")
     posting, detail = build_manual_posting(posting_id, captured_at or datetime.now(timezone.utc).isoformat(), **fields)
     save_manual_bundle_to_db(get_db_path() if db_path is None else db_path, posting, detail, create=False)
+
+
+def load_profile(*, db_path: Path | None = None) -> LocalProfile | None:
+    return load_profile_from_db(get_db_path() if db_path is None else db_path)
+
+
+def save_profile(*, db_path: Path | None = None, **fields) -> LocalProfile:
+    values = normalize_profile(**fields)
+    return save_profile_to_db(get_db_path() if db_path is None else db_path, values)
 
 
 def load_analysis(mode: str, *, db_path: Path | None = None) -> tuple[AnalysisResult, str]:
