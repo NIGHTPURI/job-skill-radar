@@ -1,5 +1,32 @@
 # 데이터 설계
 
+## Phase 7C 설명 가능한 검토 목록 (2026-09-17)
+
+`build_discovery_shortlist`는 membership/posting/현재 JobComparison을 받아 bucket/reasons를
+추가하는 순수 함수다. 원문·그룹·review 근거 전체를 유지하며 입력을 변경하지 않는다.
+각 항목의 발견 질의/NEW 의미, 현재 프로필 미등록 필수·우대, 조건·불확실성의 reason code와
+값을 반환한다. 전체 적합 판정·점수·확률·숫자 ranking 필드는 없다.
+
+분류 우선순위는 다음과 같다(표시 순서와 별개).
+1. outside_current_target: 기존 classifier가 명시적으로 목표 밖이거나 신뢰 가능한 필수 지역 불일치.
+2. needs_information: 역할 unknown, 상세 없음/요건 미검출/미분류 품질, review 근거 하나 이상,
+   필수 지역 unknown, 또는 업무 근거만 있고 분류된 필수/우대 근거가 없음.
+3. review_with_gaps: 위 두 상태가 아니고 독립 필수 미등록 또는 필수 그룹 미충족/부분 충족.
+4. review_first: 나머지. 현재 구조화 근거에서 발견된 필수 프로필 미등록이 없다는 뜻일 뿐이다.
+
+미등록은 사용자가 실제로 기술을 모른다는 뜻이 아니다. 우대 gap·선호 지역 불일치는 필수
+gap으로 분류하지 않는다. OR는 한 구성원 등록 시 충족, AND는 전부/일부/미등록이며 그룹을
+독립 기술 gap으로 중복 생성하지 않는다. 정보가 부족한 공고에도 이미 확인한 gap 이유는 남긴다.
+충돌/미해석 근거는 보수적으로 모두 정보 부족에 둔다. 불확실성을 적합으로 표현하지 않는다.
+
+표시 순서는 review_first→review_with_gaps→needs_information→outside_current_target,
+같은 bucket에서 NEW 먼저, 이후 회사/제목 casefold·source·posting_id 오름차순이다.
+입력 순서/현재 시간에 의존하지 않는다. 마감일은 표시만 하고 자동 예측·제외하지 않는다.
+`load_discovery_shortlist`는 profile을 한 번 읽고 이력 소속의 현재 raw를 재추출·비교한다.
+검색 당시 revision과 현재 비교 revision을 모두 반환한다. 프로필 변경 후 재조회하면 분류가
+바뀌며 이력의 NEW/계획은 그대로다. shortlist는 저장하지 않으며 schema v4·추출기 v2 유지다.
+
+
 ## Phase 7B 실행 이력·schema v4 (2026-09-17)
 
 7A의 비영속 실행 한계를 대체한다. `discovery_runs`는 run_id TEXT PK, source=work24,

@@ -108,3 +108,26 @@ def discover_work24_jobs(auth_key: str, *, db_path=None, pages=DEFAULT_PAGES,
         result["status"] = "partial"
     result["completed_at"] = _now()
     return save_discovery_batch(path, result, list(by_id.values()), details)
+
+
+def load_discovery_shortlist(*, db_path=None, run_id: str | None = None) -> dict:
+    """Recompute from one current profile and saved run membership; never HTTP/cache."""
+    from .analyzer import enrich_posting
+    from .discovery_storage import load_discovery_run
+    from .matcher import compare_profile_to_requirements
+    from .pipeline import load_posting_review
+    from .shortlist import build_discovery_shortlist
+
+    path = get_db_path() if db_path is None else db_path
+    profile = load_profile(db_path=path)
+    if profile is None:
+        raise ValueError('Save a profile before reviewing discovery')
+    run = load_discovery_run(path, run_id)
+    items = []
+    if run:
+        for member in run['postings']:
+            review = load_posting_review(member['source'], member['posting_id'], db_path=path)
+            posting = enrich_posting(review['posting'])
+            comparison = compare_profile_to_requirements(profile, review['requirements'], posting_role=posting['role'])
+            items.append({'membership': member, 'posting': posting, 'comparison': comparison})
+    return {'run': run, 'profile_revision': profile['revision'], 'items': build_discovery_shortlist(items)}

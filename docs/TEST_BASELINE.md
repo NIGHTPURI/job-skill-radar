@@ -1,5 +1,14 @@
 # Phase 1A — Regression Test Baseline
 
+## Phase 7C 검증 (2026-09-17)
+
+전체437개(기존424+shortlist13) 통과. discovery 집중42개 통과.
+필수 independent/AND/OR·우대 비승격·목표 밖/unknown·모든 품질 상태·충돌/업무만 존재·
+필수 지역 불일치/unknown·선호 불일치·정렬/불변성·근거 보존·금지 점수 필드 부재·identity/
+revision 일관성·프로필 변경 시 과거 실행의 현재 비교 재계산을 검증했다.
+full regression·요건 평가60/60·sample CLI·diff check 통과. 실제 외부 호출은 사용하지 않았다.
+
+
 ## Phase 7B 검증 (2026-09-17)
 
 전체424개 통과(7A412 + 실행 저장8 + v4이전4). discovery 집중29개가 통과한다.

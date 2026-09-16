@@ -1,5 +1,12 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
+## Phase 7C 완료
+
+7B c061056 push/clean 후 순수 검토 분류와 현재 프로필 재계산 application API를 추가했다.
+네 bucket·설명·NEW 우선 결정적 순서·필수 AND/OR·unknown/우대 비승격을 검증했다.
+437개 전체 테스트·기존 fixture gate 통과. 7D 실사용 UI/CLI가 남았다.
+
+
 ## Phase 7B 완료
 
 7A 5e36f27 push/clean 이후 실행/소속 이력과 schema v4를 추가했다. 반복10→10→12개 검색에서

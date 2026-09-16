@@ -1,5 +1,14 @@
 # Target Architecture — 개인용 Job Intelligence
 
+## Phase 7C 현재 경계 (2026-09-17)
+
+실행 이력→현재 프로필 한 번 읽기→소속 공고별 기존 raw 추출/순수 matcher→순수 shortlist다.
+HTTP/SQL/UI 없는 shortlist가 설명 code/values와 네 검토 bucket을 반환한다. 기존 matcher의
+독립/AND/OR·선호/필수·unknown 의미를 바꾸지 않는다. 현재 profile revision이 다른 비교를
+한 shortlist에 섞거나 identity가 다르면 거절한다. 파생 저장/캐시·추가 migration은 없다.
+7D는 이 결과를 UI/CLI에 연결한다. Work24 외 자동 source·지원 추적은 포함하지 않는다.
+
+
 ## Phase 7B 현재 경계 (2026-09-17)
 
 schema v4: 자동 발견 실행/소속을 discovery_storage에 추가했다. 7A 코어의 마지막 저장에만

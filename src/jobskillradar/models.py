@@ -280,3 +280,16 @@ class DiscoveryRun(TypedDict):
     details_deferred: int
     new_postings: int
     postings: list[DiscoveryMember]
+
+
+class DiscoveryReason(TypedDict):
+    code: str
+    values: list[str]
+
+
+class DiscoveryReviewItem(TypedDict):
+    membership: DiscoveryMember
+    posting: JobPosting
+    comparison: JobComparison
+    bucket: Literal['review_first', 'review_with_gaps', 'needs_information', 'outside_current_target']
+    reasons: list[DiscoveryReason]
