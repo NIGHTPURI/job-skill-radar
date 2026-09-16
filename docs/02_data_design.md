@@ -45,6 +45,53 @@ Phase 1B 기준 실제 schema는 `user_version=0`, job_postings의 posting_id �
 
 역사 snapshot·updated_at·migration framework·ORM은 추가하지 않았다. 기존 `기타` 값이 원래 결측이었는지는 판단할 수 없어 소급 치환하지 않는다.
 
+## Phase 2A 기술 taxonomy와 추출 계약
+
+2026-09-16 기준. 저장 스키마·identity·migration·transaction 계약은 위 Phase 1C와 같다. 추출 정책만 아래와 같이 확장했다.
+
+### 구조와 범위
+
+`skill_taxonomy.py`의 `SKILL_DEFINITIONS`는 canonical 이름 → (유지보수용 category, 추가 alias) 순서형 dict다. canonical 이름 자체도 alias로 등록한다. 기존 31개 Data/AI 중심 기술과 그 출력 순서를 유지하고 28개를 추가하여 총 59개다. category는 누락·별칭 검토에만 사용하며 UI나 직무 분류에 전달하지 않는다. JSON/YAML/DB나 새 의존성은 추가하지 않았다.
+
+| 분류 | 지원 범위 |
+|---|---|
+| 언어·쿼리 | Python, SQL, R, Java, Kotlin, JavaScript, TypeScript |
+| backend·영속 도구 | Spring, Spring Boot, Spring MVC, Spring Security, JPA, Hibernate, QueryDSL |
+| 빌드·테스트 | Gradle, Maven, JUnit, Mockito |
+| DB·캐시·검색 | MySQL, PostgreSQL, MongoDB, MariaDB, Oracle, Redis, Elasticsearch |
+| 메시징·데이터 엔지니어링 | Kafka, RabbitMQ, Spark, Airflow |
+| 클라우드·컨테이너·OS | AWS, GCP, Azure, Docker, Kubernetes, Linux |
+| API·보안 | REST API, GraphQL, JWT, OAuth |
+| 버전 관리·CI/CD | Git, GitHub Actions, Jenkins, CI/CD |
+| 분석·BI·시각화 | Pandas, NumPy, Statistics, A/B Test, Excel, Tableau, Power BI, Looker, Plotly, GA4 |
+| AI/ML | Machine Learning, Deep Learning, NLP, PyTorch, TensorFlow, Recommender System |
+
+frontend framework는 이번 범위에 추가하지 않았다. `C`, `Go`, `AI`도 모호한 단독 alias로 새로 등록하지 않았다. 특히 AI는 Machine Learning과 동의어로 취급하지 않는다.
+
+### alias와 canonicalization
+
+- `SpringBoot`/`spring boot`/`스프링부트` → `Spring Boot`, `postgres` → `PostgreSQL`, `k8s` → `Kubernetes`, `깃` → `Git`처럼 한 개념에 canonical 이름 하나를 둔다. Spring 계열은 별개 개념이다.
+- 알려진 이름은 casefold와 내부 연속 공백 정리 후 전체 문자열로 비교한다. 추출에서는 다중 단어 alias의 공백·탭·줄바꿈을 허용한다. 띄어쓰기 없는 표기나 하이픈 표기는 명시한 alias만 인정한다.
+- canonicalization 결과는 입력에서 처음 등장한 canonical 순서로 중복을 제거한다. 빈 값은 제외한다. 미등록 기술은 앞뒤 공백만 제거하고 원래 대소문자·내부 공백을 보존한다. `C`, `Go`, `AI` 같은 미지원 이름도 사용자 입력에서 삭제하지 않는다.
+- 동일 정규화 alias가 다른 canonical에 배정되거나 빈 alias이면 초기화에서 오류를 낸다. 전체 alias의 추출·canonicalization 왕복을 테스트한다.
+
+### 경계와 겹침
+
+- Unicode 단어 문자(한글·영문·숫자·밑줄 등)에 붙은 부분 문자열은 거절한다. `JavaScript`에서 Java, `NoSQL`에서 SQL, `GitHub`에서 Git을 추론하지 않는다. `+`, `#`도 이름에 붙는 문자로 취급하여 다른 언어·식별자의 일부를 잘라내지 않는다.
+- 마침표·쉼표·괄호·슬래시·가운뎃점·세미콜론·줄바꿈은 경계다. `Python.`, `Java,`, `(Spring Boot)`, `Kafka/Redis`, `AWS·Docker`, `MySQL; PostgreSQL`을 지원한다. 구두점으로 단어를 합쳐 alias를 만들지는 않는다(`REST/API`는 REST API 아님).
+- 한글 접미사는 `은/는/이/가/을/를/과/와/의/도/로/에/만`, `으로/에서/에게/까지/부터/와의/과의/에는/에도`를 허용하되 그 뒤가 다시 단어 경계여야 한다. `파이썬으로`, `SQL과`는 허용하고 `통계청`, `통계로봇`, `SQL과제`, `깃발`, `스프링클러`는 거절한다. `자연어처리`, `통계분석` 같은 붙여 쓴 복합어는 명시적 alias로 지원한다.
+- ASCII 알파벳 1–2자 alias(현재 R, ML)는 추가로 공백을 제외한 앞뒤 `&` 및 바로 앞 수치 문맥을 거절한다. `R&D`, `R & D`, `D&R`, `10 ml`, `2.5 ML`은 검출하지 않는다. `R`, `ML engineer`, `R/Python`, `R을 사용`은 유지한다.
+- 같은 위치에서 겹치는 alias는 가장 긴 근거를 우선한다. 동률은 위치, alias 선언 순서로 결정한다. `Spring Boot`만 쓰면 Spring Boot만, `GitHub Actions`만 쓰면 GitHub Actions만 반환한다. `Java Persistence API`는 JPA만 반환한다. 별도 위치에 Spring/Java/Git이 명시되면 각각도 반환한다. Deep Learning에서 Machine Learning을 자동 추론하지 않는다.
+- 추출은 중복 없이 taxonomy 선언 순서로 반환한다. 내부 set의 순회 순서에 의존하지 않는다. title과 description은 개별 처리하여 한 필드 끝 `Machine`과 다음 필드 시작 `Learning`으로 가짜 복합 기술을 만들지 않는다.
+
+### 한계와 기존 DB 영향
+
+문맥 이해·형태소 분석은 하지 않는다. `통계`/`쿼리`/`Oracle`/`Spring` 등의 일반적·기업명 의미, 독립된 R/ML의 다른 의미, 부정·필수·우대는 구별하지 못한다. 조사와 같은 철자의 단어 끝도 완벽히 분리할 수 없다. 미등록 복합어·조사 결합·`Python3` 같은 붙여 쓴 버전은 보수적으로 누락될 수 있다. `R & Python`처럼 &로 나열한 실제 기술에서도 R은 보수적으로 제외한다. 버전 파서·Unicode 정규화·HTML parser는 도입하지 않았다.
+
+기존 v1 DB를 여는 것만으로 저장 기술을 재작성하지 않는다. 분석은 원래부터 본문을 재추출하므로, 과거 규칙으로 저장한 posting_skills와 새 분석이 다를 수 있다. 정상 save_postings 재저장 시 최신 추출 집합으로 원자적 교체한다. v0 migration도 기존 설계대로 실행 시점의 extractor를 사용하므로 새 규칙의 기술 집합을 생성한다. migration 코드·버전·백업·rollback 방식은 변경하지 않았다. 자동 backfill이나 taxonomy 버전 저장은 이번 범위에 넣지 않았다.
+
+기술 추출 개선만으로 직무 분류가 정확해지지는 않는다. `Backend Engineer` + `Spring Boot Redis`는 여전히 데이터 분석가이고, `Docker.`의 검출 복원은 기존 분류기의 데이터 엔지니어 규칙을 활성화한다. `mobile developer`→BI, `retail assistant`→ML도 남아 있다. 이는 Phase 2B 검토사항이며 분류기와 추천 점수 공식은 수정하지 않았다.
+
 ## 데이터 소스
 
 1차 데이터 소스는 고용24 채용정보 Open API입니다. API 키가 없거나 네트워크가 제한된 환경에서는 샘플 데이터를 사용합니다.

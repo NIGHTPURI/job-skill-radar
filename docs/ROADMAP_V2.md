@@ -76,7 +76,17 @@
 
 아래 Phase 2는 원래 계획이다. identity·migration·최신 본문/기술 일관성은 Phase 1C에서 먼저 완료했으므로 재구현하지 않는다. surrogate ID, SQL 리소스 폴더, storage 밖으로 추출 이동은 현재 구현의 필수 조건이 아니다. 관측 이력·snapshot 등 남은 범위는 후속 작업 전에 다시 확정한다. Phase 2는 시작하지 않았다.
 
-## Phase 2 — 저장 일관성과 수집 관측 기반
+## Phase 2A — Skill Taxonomy and Extraction Reliability 완료 (2026-09-16)
+
+사용자가 지정한 현재 Phase 2A는 기술 taxonomy·alias·추출·canonicalization 개선이다. 아래 원래 Phase 2/3의 번호와 범위보다 이 기록을 우선한다. 기존 저장 무결성은 Phase 1C에서 완료했으며 다시 구현하지 않았다.
+
+- Python `skill_taxonomy.py`로 canonical·alias·유지보수 category를 분리했다. 기존 31개를 보존하고 필수 backend 39개 전체를 포함한 총 59개를 지원한다.
+- 구두점/Unicode/한글 조사 경계, 짧은 약어·수량 보호, 가장 긴 명시적 근거 우선, 결정적 출력, 미등록 사용자 기술 보존을 구현했다. 자세한 정책은 [데이터 설계](02_data_design.md#phase-2a-기술-taxonomy와-추출-계약)를 따른다.
+- 검증: 전체 171개 중 169 통과·무관한 예상 실패 2, 일반 실패/오류 0. 추출 파일 42개, canonicalization 9개, 소비 경로 통합 5개, migration 13개, persistence integrity 15개 모두 통과. 샘플 CLI 결과 동일, diff 공백 검사 통과.
+- schema/migration/identity/저장 의미, 직무 분류, 추천 점수, UI는 변경하지 않았다. 기존 v1 DB의 기술 행을 자동 backfill하지 않는다.
+- Phase 2B는 미시작이다. backend fallback, 부분 문자열 분류, Docker/Kafka 등의 기술 하나로 직무를 결정하는 현행 규칙 및 개선된 추출이 그 규칙에 미치는 영향은 후속 검토사항이다.
+
+## 원래 Phase 2 계획 — 저장 일관성과 수집 관측 기반 (과거 제안)
 
 **목표·동기**: 오래된 본문과 누적 기술의 불일치를 먼저 해결하고 이후 개인 기록을 연결할 안정적인 공고 identity를 마련한다.
 
@@ -246,6 +256,6 @@
 
 ## 바로 다음 작업 제안
 
-**Phase 1C는 완료했다.** 중복 저장 일관성, source/ID 충돌, orphan 방지, v0→v1 migration과 `미상` 재정제 문제를 검증했다. 현재 작업은 여기서 종료하며 Phase 2는 별도 요청 후 남은 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
+**Phase 2A는 완료했다.** 기술 taxonomy와 추출 신뢰성 개선에서 종료한다. Phase 2B는 별도 요청 후 분류기 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
 
-데이터 무결성 관련 재현 테스트는 새 계약에 맞게 갱신되어 있다. taxonomy·직무 분류·추천 점수는 변경하지 않았다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.
+Phase 1C 저장 무결성과 Phase 2A 추출 회귀 테스트가 현재 기준선이다. 직무 분류·추천 점수는 변경하지 않았다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.

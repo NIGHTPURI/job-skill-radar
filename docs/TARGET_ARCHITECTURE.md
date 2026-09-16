@@ -1,5 +1,7 @@
 # Target Architecture — 개인용 Job Intelligence
 
+최신 추가 사항: Phase 2A(2026-09-16)에서 `skill_taxonomy.py`로 59개 canonical 기술과 alias·유지보수 category를 분리하고 추출 경계·겹침·canonicalization을 보강했다. Python 데이터 모듈을 사용하며 JSON/YAML taxonomy나 role_classifier는 도입하지 않았다. [추출 계약](02_data_design.md#phase-2a-기술-taxonomy와-추출-계약)과 [검증 기록](TEST_BASELINE.md#phase-2a-검증-2026-09-16)을 따른다. 아래 Phase 1C/1B 현황은 해당 단계 기록이며 저장 계약은 그대로다. Phase 2B는 시작하지 않았다.
+
 상태: Phase 1C 저장 무결성·마이그레이션 완료(2026-09-16). 아래의 Phase 1C 현황이 최신이며 Phase 1B 기록은 당시 구조다. 장기 구조는 설계 제안이다. Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다.
 
 ## Phase 1C 실제 구현 현황

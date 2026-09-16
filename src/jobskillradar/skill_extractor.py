@@ -3,76 +3,93 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
+from .skill_taxonomy import SKILL_ALIASES
 
-SKILL_ALIASES = {
-    "Python": ["python", "파이썬"],
-    "SQL": ["sql", "쿼리"],
-    "R": ["r"],
-    "Java": ["java"],
-    "Pandas": ["pandas"],
-    "NumPy": ["numpy"],
-    "Statistics": ["statistics", "통계"],
-    "A/B Test": ["a/b test", "ab test", "a-b test", "ab테스트", "a/b테스트"],
-    "Excel": ["excel", "엑셀"],
-    "Tableau": ["tableau", "태블로"],
-    "Power BI": ["power bi", "powerbi"],
-    "Looker": ["looker"],
-    "Plotly": ["plotly"],
-    "Spark": ["spark", "스파크"],
-    "Airflow": ["airflow"],
-    "Kafka": ["kafka"],
-    "Docker": ["docker"],
-    "Kubernetes": ["kubernetes", "k8s"],
-    "AWS": ["aws", "amazon web services"],
-    "GCP": ["gcp", "google cloud"],
-    "Azure": ["azure"],
-    "MySQL": ["mysql"],
-    "PostgreSQL": ["postgresql", "postgres"],
-    "MongoDB": ["mongodb", "mongo db"],
-    "Machine Learning": ["machine learning", "머신러닝", "ml"],
-    "Deep Learning": ["deep learning", "딥러닝"],
-    "NLP": ["nlp", "자연어"],
-    "PyTorch": ["pytorch", "파이토치"],
-    "TensorFlow": ["tensorflow", "텐서플로"],
-    "Recommender System": ["recommender system", "추천시스템", "추천 시스템"],
-    "GA4": ["ga4", "google analytics 4"],
-}
+
+# Permit complete Korean particles, never arbitrary Hangul suffixes. Compound
+# terms (e.g. natural-language processing) belong in the taxonomy as aliases.
+KOREAN_PARTICLES = (
+    "으로", "에서", "에게", "까지", "부터", "와의", "과의", "에는", "에도",
+    "은", "는", "이", "가", "을", "를", "과", "와", "의", "도", "로", "에", "만",
+)
+_PARTICLES = "|".join(KOREAN_PARTICLES)
+
+
+def _alias_key(value: str) -> str:
+    return " ".join(value.casefold().split())
 
 
 def _alias_pattern(alias: str) -> re.Pattern[str]:
-    escaped = re.escape(alias.lower())
-    return re.compile(rf"(?<![a-z0-9+#.]){escaped}(?![a-z0-9+#.])")
+    escaped = r"\s+".join(re.escape(part) for part in alias.split())
+    # Unicode word boundaries block Latin, Hangul and identifier substrings.
+    # '+' and '#' remain attached to names; ordinary dots delimit sentences.
+    return re.compile(rf"(?<![\w+#]){escaped}(?=(?:{_PARTICLES})?(?![\w+#]))")
 
 
-COMPILED_ALIASES = {
-    skill: [_alias_pattern(alias) for alias in aliases]
-    for skill, aliases in SKILL_ALIASES.items()
-}
+def _compile_aliases() -> tuple[dict[str, str], list[tuple[str, str, re.Pattern[str]]]]:
+    canonical_by_alias: dict[str, str] = {}
+    patterns = []
+    for canonical, aliases in SKILL_ALIASES.items():
+        for alias in aliases:
+            key = _alias_key(alias)
+            if not key:
+                raise ValueError(f"Empty skill alias: {canonical}")
+            if key in canonical_by_alias:
+                if canonical_by_alias[key] != canonical:
+                    raise ValueError(f"Ambiguous skill alias: {alias}")
+                continue
+            canonical_by_alias[key] = canonical
+            patterns.append((canonical, key, _alias_pattern(key)))
+    return canonical_by_alias, patterns
+
+
+_CANONICAL_BY_ALIAS, _COMPILED_ALIASES = _compile_aliases()
+
+
+def _short_alias_context(text: str, start: int, end: int) -> bool:
+    # One/two-letter aliases need more than token boundaries: reject compound
+    # abbreviations (R&D, R & D) and quantities (10 ml). This is deliberately
+    # conservative; semantic disambiguation is outside this lexical extractor.
+    before, after = text[:start].rstrip(), text[end:].lstrip()
+    return not (before.endswith("&") or after.startswith("&")
+                or (before and before[-1].isdigit()))
 
 
 def extract_skills(*texts: str | None) -> list[str]:
-    haystack = " ".join(text or "" for text in texts).lower()
-    found = []
-    for skill, patterns in COMPILED_ALIASES.items():
-        if any(pattern.search(haystack) for pattern in patterns):
-            found.append(skill)
-    return found
+    """Return explicitly mentioned skills once, in stable taxonomy order.
+
+    Longest overlapping evidence wins. A separate broader mention still counts.
+    Process fields separately so aliases cannot be manufactured across fields.
+    """
+    found = set()
+    for text in texts:
+        haystack = (text or "").casefold()
+        candidates = []
+        for order, (skill, alias, pattern) in enumerate(_COMPILED_ALIASES):
+            short = alias.isascii() and alias.isalpha() and len(alias) <= 2
+            for match in pattern.finditer(haystack):
+                start, end = match.span()
+                if short and not _short_alias_context(haystack, start, end):
+                    continue
+                candidates.append((start, end, order, skill))
+        occupied: list[tuple[int, int]] = []
+        for start, end, _, skill in sorted(candidates, key=lambda item: (-(item[1] - item[0]), item[0], item[2])):
+            if any(start < right and end > left for left, right in occupied):
+                continue
+            occupied.append((start, end))
+            found.add(skill)
+    return [skill for skill in SKILL_ALIASES if skill in found]
 
 
 def canonicalize_skills(skills: Iterable[str]) -> list[str]:
-    canonical_by_alias = {}
-    for canonical, aliases in SKILL_ALIASES.items():
-        canonical_by_alias[canonical.lower()] = canonical
-        for alias in aliases:
-            canonical_by_alias[alias.lower()] = canonical
-
+    """Normalize whole skill names, retaining unknown spelling and input order."""
     result = []
     seen = set()
     for raw_skill in skills:
         value = raw_skill.strip()
         if not value:
             continue
-        canonical = canonical_by_alias.get(value.lower(), value)
+        canonical = _CANONICAL_BY_ALIAS.get(_alias_key(value), value)
         if canonical not in seen:
             seen.add(canonical)
             result.append(canonical)

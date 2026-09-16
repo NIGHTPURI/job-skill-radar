@@ -1,6 +1,6 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 1C 재개 검증](#phase-1c-재개-검증-2026-09-16)을 따른다. 앞의 Phase 1A/1B 수치와 결함 설명은 당시 기록이다.
+최신 결과는 문서 끝의 [Phase 2A 검증](#phase-2a-검증-2026-09-16)을 따른다. 앞의 Phase 1A/1B/1C 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
@@ -193,3 +193,41 @@ KD-06(본문/기술 불일치), KD-07(source 충돌), KD-10(orphan), KD-11(결�
 남은 expected failure는 KD-01(`Python.` 누락), KD-02(`R&D`의 R 오탐), KD-05(limit=0 추천 반환), KD-08(`경력무관` 오분류)이다. KD-03(한글 부분 문자열 오탐), KD-04(직무 부분 문자열 오분류), KD-09(오류 XML과 빈 결과 혼동)도 기존 결함 재현 테스트로 남는다. Phase 1C 범위 밖이므로 수정하지 않았다.
 
 이번 검증은 메모리/임시 SQLite와 mock 기반이다. 실제 사용자 DB 이전, Streamlit UI, 실 Work24 API, 동시 writer·디스크 장애·강제 프로세스 종료 복구는 검증하지 않았다. 최초 legacy 이전은 다른 writer를 중지하고 백업 경로 권한·공간을 확인해야 한다. 이미 손실된 다른 source 공고나 `기타`로 바뀐 결측 경력의 원래 값은 추정 복원하지 않는다. Phase 2는 시작하지 않았다.
+
+## Phase 2A 검증 (2026-09-16)
+
+시작 HEAD는 `a8086a6` (`docs: finalize phase 1c validation`), 브랜치는 `refactor/v2`, 작업 트리는 깨끗했다. 문서 5개와 extractor/analyzer/normalizer, storage/migrations/recommender 및 UI/CLI 소비 경로를 확인한 뒤 기준선을 실행했다.
+
+| 검증 | 기준선 | 최종 |
+|---|---|---|
+| 전체 unittest | 140개, 136 통과, 예상 실패 4, 0.702초 | 171개, 169 통과, 예상 실패 2 |
+| skill extractor 파일 | 16개, 14 통과, 예상 실패 2, 0.005초 | 42개 모두 통과 |
+| canonicalization 단독 | 위 파일에 포함 | 9개 모두 통과 |
+| extraction 소비 경로 통합 | 기존 경계 테스트 | 신규 5개 모두 통과 |
+| migration | 기존 전체에 포함 | 13개 모두 통과 |
+| persistence integrity | 기존 전체에 포함 | 15개 모두 통과 |
+| sample CLI | 12건, exit 0 | 출력 동일, exit 0 |
+| git diff --check | 출력 없음, exit 0 | 출력 없음, exit 0 |
+
+전체 실행의 failures/errors/skipped/unexpected successes는 기준선·최종 모두 0이다. subTest 조합은 별도 테스트 수에 더하지 않았다. 검증 명령은 다음과 같다.
+
+```powershell
+python -B -m unittest discover -s tests -v
+python -B -m unittest discover -s tests -p test_skill_extractor.py -v
+python -B -m unittest discover -s tests -p test_skill_extractor.py -k CanonicalizationTest -v
+python -B -m unittest discover -s tests -p test_skill_integration.py -v
+python -B -m unittest discover -s tests -p test_migrations.py -v
+python -B -m unittest discover -s tests -p test_persistence_integrity.py -v
+python -X utf8 -B scripts/run_demo.py
+git diff --check
+```
+
+`test_skill_extractor.py`에 26개 테스트를 추가했다. 독립적인 필수 backend 39개 목록, 기존 Data/AI 31개, 영문·한글 alias, 구두점·줄바꿈, Unicode/식별자 경계, 짧은 약어·수량, 한글 조사·부분 문자열, 가장 긴 근거 우선, 필드 간 가짜 복합어 방지, 순서·중복·미등록 입력 및 taxonomy alias 소유권을 검사한다. KD-01(`Python.`)과 KD-02(`R&D`)는 삭제하지 않고 expectedFailure를 제거했다. KD-03(`통계청`)도 기존 오탐 재현의 기대값을 수정한 일반 회귀 테스트다. JavaScript는 새 지원 기술이므로 기존 Java 부분 문자열 보호 테스트에서 JavaScript만 반환하도록 갱신했다.
+
+`test_skill_integration.py`의 5개 테스트는 새 기술의 source별 저장·정확한 교체·강제 실패 rollback, 기존 v1 읽기의 무변경·재저장 갱신, 기존 v0 이전 경로의 새 추출 결과·created_at/FK/version 보존, 보유 backend alias의 추천 제외를 확인한다. 운영 storage/migrations/analyzer/normalizer/recommender와 기존 persistence 테스트는 수정하지 않았다.
+
+샘플의 전체 기술 Counter와 직무 분포를 고정한 기존 테스트가 수정 없이 통과한다. CLI도 기준선과 동일하다: 12건, 데이터 분석가 6 / ML 엔지니어 3 / 데이터 엔지니어 2 / BI 분석가 1. 추천은 Python 9, Statistics 4, Tableau 3, Pandas 3, A/B Test 2다.
+
+남은 expected failure는 KD-05(비양수 추천 limit), KD-08(`경력무관`) 2개다. KD-04(직무 부분 문자열·기본 분류)와 KD-09(오류 XML)도 범위 밖이다. classifier 테스트 실패나 기대값 변경은 없었다. 별도 probe에서 `Spring Boot Redis` backend 공고의 데이터 분석가 fallback, `Docker.` 추출 복원 시 기존 데이터 엔지니어 규칙 활성화, mobile→BI/retail→ML을 확인했다. Phase 2B에서 검토하며 이번에 고치지 않았다.
+
+실제 공고 코퍼스 정밀도·재현율, UI, 실 API는 검증하지 않았다. 한글 조사·동음이의어·짧은 토큰의 잔여 모호성과 기존 v1 기술 행의 자동 재추출 부재는 [추출 계약](02_data_design.md#phase-2a-기술-taxonomy와-추출-계약)에 명시했다. Phase 2A 범위에서 종료한다.
