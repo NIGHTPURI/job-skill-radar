@@ -2,7 +2,6 @@
 import sqlite3
 import sys
 import unittest
-from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -83,10 +82,15 @@ class SkillIntegrationTest(unittest.TestCase):
                          "2000-01-01T00:00:00")
         self.assertEqual(self.conn.execute("PRAGMA foreign_key_check").fetchall(), [])
 
-    def test_owned_backend_aliases_filter_recommendations_without_changing_scores(self):
-        analysis = {"skill_counts": Counter({"Spring Boot": 4, "Git": 3, "Redis": 2})}
-        result = recommend_skills("unlisted role", ["스프링부트", "깃"], analysis, limit=5)
-        self.assertEqual([(item["skill"], item["score"]) for item in result], [("Redis", 2)])
+    def test_owned_backend_aliases_filter_recommendations_preserving_market_evidence(self):
+        analysis = analyze_postings([
+            {"title": "Backend Engineer", "description": "SpringBoot Git Redis"},
+            {"title": "Backend Engineer", "description": "스프링부트 깃 Redis"},
+        ])
+        result = recommend_skills("백엔드 엔지니어", ["스프링부트", "깃"], analysis, limit=5)
+        self.assertEqual([(item["skill"], item["market_count"]) for item in result],
+                         [("Redis", 2), ("REST API", 0), ("SQL", 0)])
+        self.assertTrue(all(item["role_posting_count"] == 2 for item in result))
 
 
 if __name__ == "__main__":

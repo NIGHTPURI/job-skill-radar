@@ -1,6 +1,6 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
-상태: Phase 0·1A·1B 완료. **Phase 1C 및 Phase 2는 시작하지 않았으며 추가 사용자 요청이 필요하다.**
+상태: Phase 0·1A·1B·1C·2A·2B·2C 완료. **Phase 3는 시작하지 않았다.** 아래 단계별 완료 기록이 과거 제안보다 우선한다.
 근거는 [REFACTORING_AUDIT.md](REFACTORING_AUDIT.md), 목표 경계는 [TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md)에 있다.
 
 ## 공통 완료 조건
@@ -96,6 +96,25 @@
 - 전체 210개 중 208 통과·예상 실패 2, 일반 실패/오류 0. classifier 34개, analyzer 17개, 추출 42개, migration 13개, persistence integrity 15개 통과. 샘플 CLI 결과 동일, 공백 검사 통과.
 - 기존 UI는 공유 역할 목록으로 확장된다. 추천 공식과 foundation은 바꾸지 않았으며 새 역할의 빈도·fallback 동작을 검증했다. schema/migration/identity/저장 의미 및 Phase 2A 기술 taxonomy·추출기는 변경하지 않았다.
 - [분류 계약](02_data_design.md#phase-2b-역할-taxonomy와-분류-계약)과 [검증 기록](TEST_BASELINE.md#phase-2b-검증-2026-09-16)을 따른다. Phase 2C는 미시작이며 추천 fallback·설명·새 역할/미분류 선택 정책 등 남은 제품 범위는 별도 요청 후 확정한다.
+
+## Phase 2C — Recommendation Reliability and Explainability 완료 (2026-09-16)
+
+현재 사용자 지정 범위는 학습 추천의 의미·역할 근거·fallback·정렬·설명 개선이다.
+아래 과거 Phase 2C 수집 관측 계획을 구현한 것이 아니다.
+
+- 임의의 foundation 가산 점수를 제거했다. 목표 역할의 실제 기술 언급 건수와 기초 지식을
+  분리하고 TypedDict로 순위·건수·역할 공고 수·기초 여부·근거 출처·설명을 반환한다.
+- 8개 구체적 역할에 작은 기초 목록을 정의했다. 전체 빈도 fallback은 없으며 역할 데이터가
+  없으면 기초 후보만, 미분류·미지원 역할은 빈 목록을 반환한다.
+- 정렬은 역할 빈도 → 기초 여부 → canonical 이름으로 결정적이다. 보유 별칭 제외를 유지하고
+  비양수 limit을 빈 목록으로 고쳤다. 합격 확률·적합도·백분율은 계산하지 않는다.
+- 전체 222개 중 221 통과·예상 실패 1, 일반 실패/오류 0. 추천 24, analyzer 17,
+  classifier 34, extraction 42, migration 13, persistence integrity 15, skill integration 5개 통과.
+  샘플 CLI는 집계를 유지하고 추천 순위·근거만 변경했다. git diff --check와 문법 검사 통과.
+- UI는 기존 배치를 유지하면서 점수를 순위로 바꾸고 데이터 부족·미분류 안내를 추가했다.
+  Streamlit/Plotly 부재로 실제 화면은 미검증이다. KD-08 경력무관 예상 실패는 유지했다.
+- [추천 계약](02_data_design.md#phase-2c-학습-추천-계약)과 [검증 기록](TEST_BASELINE.md#phase-2c-검증-2026-09-16)을 따른다.
+  schema/migration/identity/저장·분류·추출 의미를 바꾸지 않았다. 공고별 매칭과 Phase 3는 미시작이다.
 
 ## 원래 Phase 2 계획 — 저장 일관성과 수집 관측 기반 (과거 제안)
 
@@ -267,6 +286,6 @@
 
 ## 바로 다음 작업 제안
 
-**Phase 2B는 완료했다.** 역할 taxonomy와 분류 신뢰성 개선에서 종료한다. Phase 2C는 별도 요청 후 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
+**Phase 2C는 완료했다.** 추천 신뢰성과 설명 개선에서 종료한다. Phase 3는 시작하지 않았으며 후속 요청에서 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
 
-Phase 1C 저장 무결성, Phase 2A 추출, Phase 2B 분류 회귀 테스트가 현재 기준선이다. 추천 점수 공식은 변경하지 않았다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.
+Phase 1C 저장 무결성, Phase 2A 추출, Phase 2B 분류, Phase 2C 추천 회귀 테스트가 현재 기준선이다. 추천은 학습 후보 순서이며 공고별 적합도가 아니다. 후속 소비자는 제거된 score 키 대신 명시적 근거 계약을 사용해야 한다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.

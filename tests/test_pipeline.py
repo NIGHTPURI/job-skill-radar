@@ -39,8 +39,11 @@ class PipelineTest(unittest.TestCase):
             "Kubernetes": 1, "MySQL": 1, "Deep Learning": 1, "R": 1,
             "GA4": 1, "Recommender System": 1, "Plotly": 1,
         })
-        self.assertEqual([(r["skill"], r["score"]) for r in recommend_skills("데이터 분석가", ["SQL"], analysis, 5)],
-                         [("Python", 9), ("Statistics", 4), ("Tableau", 3), ("Pandas", 3), ("A/B Test", 2)])
+        recommendations = recommend_skills("데이터 분석가", ["SQL"], analysis, 5)
+        self.assertEqual([(r["skill"], r["market_count"]) for r in recommendations],
+                         [("Python", 5), ("A/B Test", 2), ("Tableau", 2), ("Statistics", 1), ("GA4", 1)])
+        self.assertEqual([r["priority"] for r in recommendations], [1, 2, 3, 4, 5])
+        self.assertTrue(all(r["role_posting_count"] == 6 for r in recommendations))
         self.assertFalse(self.db_path.exists())
         self.fetch.assert_not_called()
 
@@ -56,6 +59,8 @@ class PipelineTest(unittest.TestCase):
         for key in ("skill_counts", "role_counts", "career_counts", "region_counts", "role_skill_counts"):
             self.assertEqual(stored[key], sample[key])
         self.assertEqual(sorted(stored["postings"], key=lambda p: p["posting_id"]), sample["postings"])
+        self.assertEqual(recommend_skills("데이터 분석가", ["SQL"], stored),
+                         recommend_skills("데이터 분석가", ["SQL"], sample))
 
     def test_collection_normalizes_and_deduplicates_across_keywords(self):
         self.fetch.side_effect = [

@@ -1,6 +1,6 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 2B 검증](#phase-2b-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
+최신 결과는 문서 끝의 [Phase 2C 검증](#phase-2c-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
@@ -270,3 +270,83 @@ git diff --check
 샘플 CLI는 데이터 분석가 6 / ML 3 / 데이터 엔지니어 2 / BI 1이며, 전체 기술 Counter와 추천 Python 9, Statistics 4, Tableau 3, Pandas 3, A/B Test 2가 기존과 같다. 새 역할에는 foundation을 추가하지 않았고 역할 빈도·global fallback·빈 데이터 호환 테스트가 통과한다.
 
 app.py는 기존 공유 ROLE_LABELS를 사용한다. 문법 검사와 코드 연결을 확인했지만 Streamlit/Plotly가 없어 실제 UI 실행은 하지 않았다. 실 API·실제 공고 코퍼스 정확도도 미검증이다. 새 규칙의 부정·인용·혼합 제목 한계 및 추천 fallback의 제품상 한계는 데이터 설계에 기록했다. Phase 2C는 시작하지 않았다.
+
+## Phase 2C 검증 (2026-09-16)
+
+시작 HEAD는 `25f2ba3`이며 작업 트리는 깨끗했다. 요청된 문서 5개와 추천·분석·분류·taxonomy·모델·pipeline·UI·샘플 및 추천 소비 테스트를 확인했다. 운영 코드 수정 전 기준선에 일반 실패가 없음을 확인하고, [변경 전 추천 감사](TARGET_ARCHITECTURE.md#phase-2c-변경-전-추천-감사-2026-09-16)를 먼저 기록했다.
+
+| 검증 | 변경 전 정확한 기준선 | 최종 결과 |
+|---|---|---|
+| 전체 unittest | 210개: 208 통과, 예상 실패 2 (0.565초) | 222개: 221 통과, 예상 실패 1 (0.587초) |
+| recommender | 12개: 11 통과, 예상 실패 1 (0.002초) | 24개 모두 통과 (0.029초) |
+| analyzer | 17개 모두 통과 (0.011초) | 17개 모두 통과 (0.018초) |
+| role classifier | 전체 기준선 포함 | 34개 모두 통과 (0.049초) |
+| extraction/canonicalization | 전체 기준선 포함 | 42개 모두 통과 (0.088초) |
+| migration | 전체 기준선 포함 | 13개 모두 통과 (0.084초) |
+| persistence integrity | 전체 기준선 포함 | 15개 모두 통과 (0.036초) |
+| skill integration | 전체 기준선 포함 | 5개 모두 통과 (0.012초) |
+| sample CLI | 12건, exit 0 | 12건, 추천 출력만 의도적 변경, exit 0 |
+| git diff --check | 출력 없음, exit 0 | 출력 없음, exit 0 |
+
+기준선·최종의 failures/errors/skipped/unexpected successes는 모두 0이다.
+subTest 조합은 테스트 수에 별도로 더하지 않았다. 시간은 실행 환경에 따라 달라진다.
+실행 명령(각각 종료 코드 0):
+
+```powershell
+python -B -m unittest discover -s tests
+python -B -m unittest discover -s tests -p test_recommender.py
+python -B -m unittest discover -s tests -p test_analyzer.py
+python -B -m unittest discover -s tests -p test_role_classifier.py
+python -B -m unittest discover -s tests -p test_skill_extractor.py
+python -B -m unittest discover -s tests -p test_migrations.py
+python -B -m unittest discover -s tests -p test_persistence_integrity.py
+python -B -m unittest discover -s tests -p test_skill_integration.py
+python -X utf8 -B scripts/run_demo.py
+git diff --check
+```
+
+### 추천 회귀와 의도적인 계약 변경
+
+recommender 테스트는 12개에서 24개로 확대했다. 기존 가산점·global fallback·입력 순서
+의존 기대값은 새 계약으로 갱신했으며, KD-05의 기존 zero limit 테스트는 삭제하지 않고
+expectedFailure만 제거했다. 음수/0/1/일반 양수/후보 수 초과, 8개 구체적 역할 각각의
+시장 근거 분리, 미분류·미지원 역할, 작은 기초 목록, 데이터 없는 역할, 기술 없는 역할 공고,
+보유 alias·중복·전부 보유, 빈도 우선·기초 동점·이름 동점·역순 공고·반복 호출,
+설명 근거, 역할 분모·0·분모 미제공, 명시적 반환 키, 입력 불변성과 career 비의존을 검증한다.
+
+pipeline 샘플 테스트는 집계 기대값을 유지하고 추천 순위·실제 건수·분모만 새 계약으로
+검증한다. sample 직접 분석과 DB 왕복 분석의 추천도 같음을 확인했다. skill integration의
+기존 alias 테스트는 analyzer가 생산한 backend 집계에서 한국어 별칭을 제외하도록 바꿨다.
+analyzer·role classifier·extractor·migration·persistence 테스트 파일 자체는 수정하지 않았다.
+
+### 샘플 CLI 전후
+
+샘플은 그대로 12건이다. 데이터 분석가 6 / ML 3 / 데이터 엔지니어 2 / BI 1과 전체 기술
+Counter가 유지된다. SQL 보유 데이터 분석가의 이전 출력은 Python 9, Statistics 4,
+Tableau 3, Pandas 3, A/B Test 2(가산점 포함)였다. 이제 다음 순서로 출력한다.
+
+| 순위 | 기술 | 데이터 분석가 공고에서 언급 | 기초 후보 |
+|---|---|---|---|
+| 1 | Python | 6건 중 5건 | 예 |
+| 2 | A/B Test | 6건 중 2건 | 아니오 |
+| 3 | Tableau | 6건 중 2건 | 아니오 |
+| 4 | Statistics | 6건 중 1건 | 예 |
+| 5 | GA4 | 6건 중 1건 | 아니오 |
+
+Tableau/Pandas 고정 기초 가산을 제거했으므로 결과가 달라지는 것이 의도한 동작이다.
+같은 관측 빈도의 A/B Test와 Tableau, GA4와 나머지 비기초 후보는 이름으로 순서를 정한다.
+점수·백분율을 출력하지 않으며 현재 분석한 역할 공고의 언급 건수라고 설명한다.
+
+### 남은 결함과 검증 한계
+
+예상 실패는 2→1이다. KD-05 비양수 limit은 해결됐고, KD-08 경력무관은 추천이 career를
+사용하지 않으므로 수정하지 않았다. KD-09 오류 XML도 기존 수집 영역의 문제로 남는다.
+새 일반 실패나 저장·추출·분류 결함은 발견하지 않았다. 데이터가 부족한 역할을 global 빈도로
+대체하던 오해와 미분류를 목표 직무처럼 추천하던 동작은 이번에 명시적으로 제거했다.
+
+app/recommender/models/demo는 AST 문법 검사를 통과했다. Streamlit과 Plotly가 설치되어
+있지 않아 실제 UI·브라우저 상호작용은 미검증이다(pandas는 설치됨). UI의 기존 배치는 유지하고
+순위·추천 의미·미분류·데이터 부재·모두 보유 안내만 추가했다. 실 API·실제 공고 코퍼스 정확도는
+검증하지 않았다. 의존성 설치·외부 호출·실제 사용자 DB 수정은 하지 않았다.
+추천 결과는 analyzer의 일관된 집계를 전제로 하며 외부 임의 집계의 런타임 유효성 검증은 없다.
+Phase 2C에서 종료하며 Phase 3와 공고별 매칭은 시작하지 않았다.

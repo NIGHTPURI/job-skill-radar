@@ -33,7 +33,7 @@ def main() -> None:
     owned_skills = ["SQL"]
     print(f"추천 예시: 목표={target_role}, 보유기술={', '.join(owned_skills)}")
     for item in recommend_skills(target_role, owned_skills, analysis, limit=5):
-        print(f"- {item['skill']}: {item['reason']} (점수 {item['score']})")
+        print(f"- {item['priority']}순위 {item['skill']}: {item['reason']}")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ belong to analysis only. Keep absence distinct from an explicit None at runtime.
 from __future__ import annotations
 
 from collections import Counter
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 
 class JobPosting(TypedDict, total=False):
@@ -44,3 +44,15 @@ class AnalysisResult(TypedDict):
     career_counts: Counter[str | None]
     region_counts: Counter[str | None]
     role_skill_counts: dict[str, Counter[str]]
+
+
+class SkillRecommendation(TypedDict):
+    """Learning order and observable evidence, never a hiring or fit score."""
+
+    skill: str
+    priority: int
+    market_count: int
+    role_posting_count: int | None
+    is_foundation: bool
+    evidence_source: Literal["role_market", "foundation_only"]
+    reason: str

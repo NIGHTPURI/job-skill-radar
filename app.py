@@ -16,6 +16,7 @@ from jobskillradar.config import get_db_path, get_work24_auth_key
 from jobskillradar.models import AnalysisResult
 from jobskillradar.pipeline import collect_work24_to_db, load_analysis as select_analysis, seed_sample_db
 from jobskillradar.recommender import recommend_skills
+from jobskillradar.role_classifier import UNKNOWN
 
 
 st.set_page_config(page_title="Job Skill Radar", layout="wide")
@@ -113,15 +114,25 @@ with region_col:
     st.plotly_chart(px.bar(region_df, x="region", y="count", color="region"), width="stretch")
 
 st.subheader("학습 우선순위")
+st.caption("현재 분석한 공고의 기술 언급과 역할 기초 지식에 따른 학습 후보입니다. 합격 확률이나 공고별 적합도가 아닙니다.")
 target_role = st.selectbox("목표 직무", ROLE_LABELS)
 owned_raw = st.text_input("보유 기술", value="SQL", placeholder="예: SQL, Python, Tableau")
 owned_skills = [skill.strip() for skill in owned_raw.split(",") if skill.strip()]
 
 recommendations = recommend_skills(target_role, owned_skills, analysis, limit=6)
+if target_role == UNKNOWN:
+    st.info("미분류 / 기타는 목표 직무가 아니므로 학습 추천을 제공하지 않습니다. 구체적인 목표 직무를 선택하세요.")
+else:
+    if not analysis["role_counts"].get(target_role, 0):
+        st.info("현재 데이터에 목표 직무 공고가 없어 기초 학습 후보만 표시합니다.")
+    elif not analysis["role_skill_counts"].get(target_role):
+        st.info("목표 직무 공고에서 기술 언급이 추출되지 않아 기초 학습 후보만 표시합니다.")
+    if not recommendations:
+        st.info("현재 추천 후보에서 보유 기술을 제외하면 남는 기술이 없습니다.")
 rec_cols = st.columns(3)
 for index, item in enumerate(recommendations):
     with rec_cols[index % 3]:
-        st.metric(item["skill"], f"점수 {item['score']}")
+        st.metric(item["skill"], f"{item['priority']}순위")
         st.caption(item["reason"])
 
 st.subheader("공고 목록")

@@ -1,8 +1,45 @@
 # Target Architecture — 개인용 Job Intelligence
 
-최신 상태: Phase 2B 역할 taxonomy·규칙 기반 분류 완료(2026-09-16). Phase 2A의 59개 기술과 추출 계약은 유지한다. 아래 Phase 1C/1B 현황과 장기 구조는 해당 단계 기록·설계 제안이며, 최신 분류 계약은 [데이터 설계](02_data_design.md#phase-2b-역할-taxonomy와-분류-계약), 검증은 [테스트 기준선](TEST_BASELINE.md#phase-2b-검증-2026-09-16)을 따른다. Phase 2C는 시작하지 않았다.
+최신 상태: Phase 2C 추천 의미·근거·순위 계약을 적용했다(2026-09-16). Phase 2A의 59개 기술, Phase 2B 분류와 Phase 1C 저장 계약은 유지한다. 최신 추천 계약은 [데이터 설계](02_data_design.md#phase-2c-학습-추천-계약), 검증은 [테스트 기준선](TEST_BASELINE.md#phase-2c-검증-2026-09-16)을 따른다. 아래 이전 단계 기록과 장기 구조는 당시 현황·설계 제안이다. Phase 3는 시작하지 않았다.
 
 Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다. Phase 1C 저장 무결성·마이그레이션 계약은 계속 유지한다.
+
+## Phase 2C 변경 전 추천 감사 (2026-09-16)
+
+운영 코드 수정 전에 확인한 입력은 target_role 문자열, owned_skills 목록, analysis dict,
+limit(기본 8, UI 6, CLI 5)이다. 보유 기술은 기존 canonicalize_skills로 별칭을 통합하고
+set으로 중복을 제거한다. 역할명 자체의 별칭 정규화는 없다.
+
+role_skill_counts[target_role]가 존재하고 비어 있지 않으면 이를 복사하며, 없거나 비면
+skill_counts 전체 빈도로 조용히 대체한다. 기존 foundation은 데이터 분석가
+SQL/Python/Statistics/Pandas/Tableau, BI SQL/Power BI/Tableau/Excel/Looker,
+데이터 엔지니어 SQL/Python/Spark/Airflow/AWS, ML Python/Machine Learning/PyTorch/Deep Learning/SQL이다.
+각 목록 앞에서부터 5/4/3/2/1을 더하며 관측되지 않은 기술도 후보에 넣는다.
+새 소프트웨어 역할과 미분류에는 foundation이 없다.
+
+따라서 score는 선택한 Counter의 공고 언급 건수 + 임의의 기초 가산점이다.
+샘플 Python 9는 분석가 공고 5건 + 기초 가산 4이며 확률·적합도·시장 비율이 아니다.
+Counter.most_common 내림차순에서 보유 기술을 건너뛰며 동점은 Counter 삽입 순서에 따른다.
+기초 기술 설명은 시장 근거를 가리고, 나머지는 global fallback도 목표 직무 빈도라고 설명한다.
+추가 후 limit을 검사하므로 후보가 있으면 0과 음수에도 1개를 반환한다.
+
+수정 전 검증: 전체 210개 중 208 통과·예상 실패 2(0.565초), 추천 12개 중
+11 통과·예상 실패 1(0.002초), analyzer 17개 통과(0.011초). CLI는 12건과
+Python 9/Statistics 4/Tableau 3/Pandas 3/A/B Test 2를 출력했고 git diff --check도 exit 0이다.
+일반 실패·오류는 없다. 경력무관 결함은 career 정제만의 문제이며 추천 입력에 필요하지 않다.
+
+### Phase 2C 실제 구현 경계
+
+recommender는 analyzer가 만든 집계만 소비하는 순수 함수다. SQLite·네트워크·Streamlit을
+참조하지 않으며 analyzer나 classifier를 다시 실행하지 않는다. models의 SkillRecommendation
+TypedDict는 런타임 dict를 유지한다. 기존 score 키는 제거하고 priority, market_count,
+role_posting_count, is_foundation, evidence_source와 reason을 반환한다.
+
+역할별 언급 건수 내림차순 → 기초 여부 → canonical 이름 순으로 정렬한다.
+8개 구체적 역할에는 작은 기초 후보를 제공하고 미분류·미지원 역할에는 빈 목록을 반환한다.
+역할 데이터가 없으면 기초 후보만 남기며 전체 빈도로 대체하지 않는다. UI는 입력 역할과
+기존 role_counts/role_skill_counts로 빈 결과와 데이터 부족을 안내하고 각 항목의 설명을 표시한다.
+새 응답 wrapper나 별도 서비스는 필요하지 않다. CLI/UI는 score 대신 순위를 소비한다.
 
 ## Phase 2B 실제 구현과 변경 전 분류 감사
 
