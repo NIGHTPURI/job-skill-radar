@@ -184,3 +184,53 @@ class ProfileValues(TypedDict):
 
 class LocalProfile(ProfileValues):
     revision: int
+
+
+class SkillComparison(TypedDict):
+    skill: str
+    requirement_type: RequirementType
+    status: Literal["matched", "profile_missing", "matched_preferred", "profile_missing_preferred",
+                    "profile_has", "profile_not_listed"]
+    evidence: list[RequirementEvidence]
+
+
+class GroupComparison(TypedDict):
+    relation: Literal["all_of", "any_of"]
+    requirement_type: RequirementType
+    skills: list[str]
+    profile_has: list[str]
+    profile_not_listed: list[str]
+    status: Literal["satisfied", "partially_satisfied", "not_satisfied_from_profile", "unknown", "context_only"]
+    evidence: RequirementEvidence
+
+
+class ComparisonReview(TypedDict):
+    skill: str | None
+    reason: str
+    evidence: list[RequirementEvidence]
+
+
+class ConditionComparison(TypedDict):
+    source_field: str
+    raw_text: str | None
+    policy: Literal["required", "preferred", "not_configured"]
+    expected_values: list[str]
+    status: Literal["satisfied", "not_satisfied", "unknown", "preference_match", "preference_mismatch"]
+    reason: str
+
+
+class JobComparison(TypedDict):
+    profile_revision: int
+    extractor_version: int
+    source: str | None
+    posting_id: str | None
+    detail_fetched_at: str | None
+    quality_status: RequirementQuality
+    required: list[SkillComparison]
+    preferred: list[SkillComparison]
+    responsibilities: list[SkillComparison]
+    groups: list[GroupComparison]
+    review: list[ComparisonReview]
+    conditions: list[ConditionComparison]
+    posting_role: str | None
+    role_alignment: Literal["target_role", "outside_target_roles", "unknown"]

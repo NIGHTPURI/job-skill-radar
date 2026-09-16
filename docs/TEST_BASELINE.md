@@ -1,5 +1,40 @@
 # Phase 1A — Regression Test Baseline
 
+## Phase 6A 검증 (2026-09-17)
+
+Phase 5 367개에서 **395개 모두 통과**. 실패/오류/expected failure/skip 0.
+새 테스트는 test_matcher 20, test_pipeline_comparison 6, test_comparison_ui 2다.
+기존 requirement extractor/evaluation corpus와 운영 규칙은 수정하지 않았으며
+60/60사례·144/144분류·13/13그룹, required/preferred false positive 0을 유지한다.
+
+순수 비교 테스트는 필수/우대/업무 등록·미등록, unspecified/부정의 비승격, AND 전체/일부/미등록,
+OR 첫째/둘째/둘 다/미등록, preferred OR, 그룹 구성원 비중복, 독립 근거 공존, 서로 다른 분류와
+부정 근거 보존, 네 품질 상태, 미지원 기술/alias/비추론, 지역 충족/불일치/unknown와 선호 구분,
+경력/학력/고용 형태 unknown, 목표 직무가 기술 판정을 바꾸지 않음, 결정성·입력 불변·반환 객체
+독립성·score/fit/probability/전체 verdict 필드 부재·미검토 추출 버전 거절을 검사한다.
+
+Application은 임시 SQLite로 수동·고용24 흐름, 프로필 revision 변경, 본문 변경, 재시작,
+상세 실패 보존, 조회 연결 종료 후 비교, 비교 실패 시 DB 보존, 시장/schema 불변을 검사한다.
+UI는 실제 app.py에서 수동 등록→프로필 저장→새 세션→OR 조건/우대/업무/미분류 비교→본문 수정
+후 AND 재계산까지 수행한다. 그룹의 개별 구성원은 원문 검토/비교 화면에서 중복 필수로 표시하지
+않는다. 프로필 없음·고용24 상세 없음도 성공 판정 없이 안내한다. exact evidence JSON을 제공한다.
+
+전체 unittest·matcher/comparison 집중 suite·평가 CLI·sample CLI·diff --check와 headless smoke를
+수행했다. 실 외부 네트워크/API 키는 불필요하다. headless 프로세스는 health 확인 후 종료한다.
+schema v3·migration/프로필/수동 워크플로·Work24·skill/role/analyzer/recommender 회귀가 통과한다.
+
+아침 실행:
+
+```bash
+cd ~/Dev/job-skill-radar
+.venv/bin/python -m streamlit run app.py --server.address 127.0.0.1
+```
+
+첫 실행에서 기존 v2 파일은 고유 pre-v3-from-v2 백업 후 자동 이전된다. 다른 writer와 이전
+버전 앱을 먼저 종료한다. 사용자 실제 DB는 야간 테스트에 사용하지 않았다. 실공고 정확도,
+복잡한 논리/부정·미지원 기술, 동시 편집 충돌 알림, 삭제/프로필 이력은 이번 검증 범위가 아니다.
+Phase 6B는 미구현이며 다음 기능 개발 전에 실제 공고의 원문/추출/그룹 표현을 수동 검토한다.
+
 ## Phase 5 검증 (2026-09-17)
 
 Phase 4A 345개에서 **367개 전부 통과**. 실패/오류/expected failure/skip 0.

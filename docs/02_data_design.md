@@ -1,5 +1,59 @@
 # 데이터 설계
 
+## Phase 6A 설명 가능한 공고 비교 (2026-09-17)
+
+현재 완료 범위는 Phase 4A·5·6A다. 아래 이전 기록의 미시작 문구는 당시 경계다.
+`matcher.compare_profile_to_requirements(profile, extraction, posting_role=...)`는 순수 함수다.
+HTTP·SQLite·UI 상태·LLM을 사용하지 않고 입력을 수정하지 않는다. 결과도 입력 근거와 별개
+객체로 반환한다. 점수·비율·확률·후보 순위·전체 적합/부적합 verdict는 없다.
+
+`JobComparison`은 profile_revision, extractor_version, source/posting_id, detail_fetched_at,
+quality_status와 required/preferred/responsibilities/groups/review/conditions를 갖는다.
+posting_role/role_alignment는 목표 직무 포함 여부만 표시하며 요건 판정을 바꾸지 않는다.
+현재 검토한 extractor version 2 계약만 허용하고 새 의미 버전은 검토 없이 소비하지 않는다.
+
+| 근거 | 프로필 등록 | 미등록 |
+|---|---|---|
+| 독립 required | matched | profile_missing |
+| 독립 preferred | matched_preferred | profile_missing_preferred |
+| responsibility | profile_has | profile_not_listed |
+| unspecified | 판단 필요 근거 | 판단 필요 근거 |
+
+미등록은 실제로 모른다는 주장이 아니다. 부정/미분류 근거는 required gap으로 승격하지 않는다.
+독립 분류는 **independent 근거 안에서** 기존 required > preferred > responsibility > unspecified
+우선순위를 적용한다. all_of/any_of 근거만 있는 기술은 독립 결과 목록에 다시 넣지 않는다.
+원문 검토 화면도 같은 projection으로 그룹 중복 표시를 피한다. 그룹과 별도로 있는 진짜 독립
+근거는 유지한다. 예: required all_of(Java,SQL) + 독립 Java preferred는 그룹 하나와 우대 항목
+하나이며 Java를 독립 required로 승격하지 않는다. 원래 추출 결과 자체는 변경하지 않는다.
+
+all_of는 전부 등록=satisfied, 일부=partially_satisfied, 전부 미등록=not_satisfied_from_profile.
+any_of는 하나 이상 등록=satisfied, 전부 미등록=not_satisfied_from_profile이며 부분 충족 상태는
+없다. 각 그룹에 등록/미등록 구성원, requirement_type, 원문 evidence를 보존한다. preferred
+그룹은 우대이지 필수 위반이 아니다. unspecified 그룹은 보유 기술이 있어도 unknown이며
+responsibility 그룹은 context_only다. 반복 원문 위치는 그대로 유지하고 논리식을 축약하지 않는다.
+
+서로 다른 분류의 근거, 긍정·부정 공존, 미분류/미매핑 근거는 review에 별도로 노출한다.
+기술 결과에는 약한 근거와 그룹 근거까지 원래 전체 provenance가 남는다. 서로 다른 문장 간
+논리적 충돌을 자동 해결하지 않으며, 대표 분류와 원문을 함께 검토해야 한다.
+네 quality_status는 그대로 전달한다. 상세 없음/요건 근거 미검출/미분류 상태는 정보 부족이지
+완벽한 일치가 아니다. 빈 required 목록에도 성공 verdict를 만들지 않는다.
+
+비기술 조건 중 프로필이 선언한 지역만 제한적으로 비교한다. work_region 원문 전체를 trim한
+값이 정확한 단일 지원 시·도 label일 때만 판단한다. 예: 서울/부산은 비교 가능하지만
+서울 강남구, 서울 또는 경기, 재택, 미제공은 unknown이다. substring/통근/지리 추론은 없다.
+필수 지역은 satisfied/not_satisfied/unknown, 선호 지역은 preference_match/preference_mismatch/
+unknown이며 동시에 설정돼도 별도 결과다. 경력·학력·고용 형태와 미설정 조건은 raw와 unknown을
+보존한다. 기존 normalized career만으로 사용자의 연차·학위·취업 자격을 추정하지 않는다.
+
+pipeline.load_posting_comparison은 저장 프로필과 선택 공고의 원문을 읽고 연결을 모두 닫은 뒤
+추출/비교한다. 결과는 영속화하지 않는다. profile revision·성공 상세 갱신·수동 본문 수정 후
+조회하면 최신 결과를 재계산하며 실패 refresh/비교 오류는 원문이나 프로필을 지우지 않는다.
+**schema v3 유지, v4 없음, extractor v2 유지**. 시장 analyzer/recommender 규칙도 그대로다.
+
+UI의 ‘내 프로필과 비교’에서 필수/우대/업무/그룹/판단 필요/기타 조건과 정확한 근거를 확인한다.
+그룹은 단일 조건으로 표시하며 ‘실제로 기술을 모른다’고 표현하지 않는다. 실공고 추출 정확도는
+아직 측정하지 않았고 비교는 저장된 자기 선언과 제한된 규칙 근거에 의존한다. Phase 6B는 없다.
+
 ## Phase 5 로컬 프로필·schema v3 (2026-09-17)
 
 현재 schema는 **v3**다. 아래 v2 설명은 이전 단계 당시 기록이며 공고/raw 계약 자체는 유지한다.

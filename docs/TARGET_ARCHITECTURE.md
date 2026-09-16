@@ -1,5 +1,23 @@
 # Target Architecture — 개인용 Job Intelligence
 
+## Phase 6A 현재 구현 경계 (2026-09-17)
+
+최신 완료 상태는 Phase 4A·5·6A, schema v3, extractor v2다. 아래 단계별 기록은 완료 당시 상태다.
+UI → pipeline.load_posting_comparison → profile/detail readers 종료 → pure matcher 순이다.
+비교 결과는 현재 profile revision과 원문/fetched_at/extractor version에서 다시 계산한다.
+캐시·matcher 테이블·schema v4·점수 subsystem은 없다. comparison 모델에는 상태와 provenance만 있다.
+
+독립 근거와 all_of/any_of를 별도 단위로 처리해 그룹 구성원을 독립 mandatory gap으로 중복
+표시하지 않는다. OR 하나 충족, AND 전체/일부/미등록, 우대/업무/미분류의 서로 다른 의미를
+유지한다. 충돌·긍정/부정 근거는 review에 남긴다. 전역 적합도 verdict를 반환하지 않는다.
+지역은 정확한 단일 시·도 원문과 선언된 선호/필수 목록만 비교하며 나머지는 unknown이다.
+목표 직무 포함 여부는 안내용이고 기술 조건을 덮어쓰지 않는다. 전체 시장 빈도·역할 분류·
+학습 추천 로직은 계속 별도다. 기존 상세 추출/평가 corpus도 변경하지 않았다.
+
+아침 흐름은 공고 직접 등록 → 저장한 공고/원문·요건 → 내 프로필 저장 → 재시작 → 공고에서
+‘내 프로필과 비교’다. AppTest로 이 전체 흐름과 이후 본문 수정 재계산을 검증했다.
+Phase 6B 숫자 점수·후보 순위·합격 확률은 의도적으로 미구현이다.
+
 ## Phase 5 현재 구현 경계 (2026-09-17)
 
 현재 schema v3와 단일 로컬 프로필을 사용한다. profile.py는 기존 taxonomy/역할 기반 순수

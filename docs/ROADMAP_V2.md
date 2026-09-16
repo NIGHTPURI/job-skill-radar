@@ -1,5 +1,17 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
+## Phase 6A 완료 기록 — Explainable Job Gap Comparison (2026-09-17)
+
+- Phase 5 d273d3d push/clean 이후 01:38:53 KST에 시작했다. deadline까지 약 7시간 40분이었다.
+- 순수 matcher와 TypedDict 상태/근거 계약, pipeline 조회, 선택 공고 비교 UI를 추가했다.
+- independent/all_of/any_of를 구별하고 동일 그룹 근거를 독립 mandatory 부족으로 중복 표시하지 않는다.
+- 필수·우대·업무·미분류·정보 부족의 의미를 분리하며 점수/확률/전체 적합 판정을 만들지 않는다.
+- 지역은 단일 시·도 원문만 비교한다. 나머지 조건은 raw/unknown으로 유지한다.
+- 전체 395개 통과, 신규 matcher 20 + application 6 + UI 2. 기존 Phase 3C 평가 gate 유지.
+- schema v3·비교 비영속·원문/프로필 보존·기존 시장 분석/추천 유지. Phase 6B는 시작하지 않는다.
+- 다음은 실제 붙여넣은 공고의 보수적 수동 검토와 사용성 피드백이다. 숫자 점수는 별도 요청과
+  의미/검증 설계 없이는 추가하지 않는다. 이하 과거 계획보다 이 완료 기록이 우선한다.
+
 ## Phase 5 완료 기록 — Local User Profile and Preferences (2026-09-17)
 
 - Phase 4A 8d0fb7a push/clean 뒤 시작했다. OS 시간 확인상 3시간 이상 여유가 있었다.

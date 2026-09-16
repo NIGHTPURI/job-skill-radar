@@ -5,7 +5,8 @@ import sqlite3
 
 import streamlit as st
 
-from .pipeline import create_manual_posting, list_saved_postings, load_posting_review, update_manual_posting
+from .matcher import independent_requirement_type
+from .pipeline import create_manual_posting, list_saved_postings, load_posting_comparison, load_posting_review, update_manual_posting
 
 KIND_LABELS = {"required": "필수 요건", "preferred": "우대 요건",
                "responsibility": "업무 관련 기술", "unspecified": "판단 필요"}
@@ -22,7 +23,7 @@ def render_requirements(extraction: dict) -> None:
     st.caption(f"추출 규칙 버전 {extraction['extractor_version']} · 원문에서 다시 계산한 결과")
     for kind, label in KIND_LABELS.items():
         with st.expander(label, expanded=kind in {"required", "preferred"}):
-            items = [s for s in extraction["skills"] if s["requirement_type"] == kind]
+            items = [s for s in extraction["skills"] if independent_requirement_type(s["evidence"]) == kind]
             if not items:
                 st.caption("이 범주로 분류된 개별 기술 근거가 없습니다. 선택 조건과 원문도 확인하세요.")
             for item in items:
@@ -114,6 +115,8 @@ def render_posting_browser() -> None:
         if detail:
             st.caption("원문 저장/관측 시각: " + detail["fetched_at"])
     render_requirements(review["requirements"])
+    if st.checkbox("내 프로필과 비교", key="compare_" + identity[0] + "_" + identity[1]):
+        render_comparison(*identity)
     if identity[0] == "manual":
         with st.expander("수동 공고 수정"):
             key = "manual_edit_" + identity[1] + "_" + ((detail or {}).get("fetched_at") or "missing")
@@ -128,3 +131,62 @@ def render_posting_browser() -> None:
                 else:
                     st.session_state["posting_notice"] = "같은 공고의 원문과 정보를 수정했습니다."
                     st.rerun()
+
+
+def render_comparison(source: str, posting_id: str) -> None:
+    try:
+        result = load_posting_comparison(source, posting_id)
+    except ValueError as error:
+        st.info(f"비교하려면 먼저 ‘내 프로필’에서 프로필을 저장하고 공고 근거를 확인하세요. {error}")
+        return
+    except (sqlite3.Error, OSError):
+        st.error("비교 자료를 읽지 못했습니다. DB 상태를 확인하세요.")
+        return
+    st.header("내 프로필과 공고 근거 비교")
+    st.caption(f"프로필 버전 {result['profile_revision']} · 추출 규칙 버전 {result['extractor_version']}. "
+               "프로필에 등록한 내용만 비교합니다. 미등록은 실제 지식 부족의 증명이 아니며, 보유 수준·합격 가능성을 판정하지 않습니다.")
+    st.info(QUALITY_LABELS[result["quality_status"]])
+    role_labels = {"target_role": "저장한 목표 직무에 포함", "outside_target_roles": "저장한 목표 직무와 다름",
+                   "unknown": "직무 분류 판단 필요"}
+    st.text(f"공고 직무: {result['posting_role'] or '미상'} · {role_labels[result['role_alignment']]}")
+    statuses = {"matched": "프로필에 등록됨", "profile_missing": "프로필에 등록되어 있지 않음",
+                "matched_preferred": "우대 기술이 프로필에 등록됨", "profile_missing_preferred": "우대 기술이 프로필에 미등록 (필수 부족 아님)",
+                "profile_has": "업무 관련 기술이 프로필에 등록됨", "profile_not_listed": "업무 관련 기술이 프로필에 미등록 (필수 부족 아님)"}
+    for bucket, label in (("required", "필수 요건 비교"), ("preferred", "우대 요건 비교"), ("responsibilities", "업무 관련 기술 비교")):
+        st.subheader(label)
+        if not result[bucket]:
+            st.caption("독립적으로 비교할 분류 근거가 없습니다. 조건 충족이나 요건 부재를 뜻하지 않습니다. 아래 그룹과 판단 필요 근거를 확인하세요.")
+        for item in result[bucket]:
+            st.text(f"{item['skill']}: {statuses[item['status']]}")
+            with st.expander("근거 · " + item["skill"]):
+                st.json(item["evidence"])
+    st.subheader("선택 조건 / 공동 조건 비교")
+    group_status = {"satisfied": "프로필 등록 기준 충족", "partially_satisfied": "일부 구성원만 프로필에 등록됨",
+                    "not_satisfied_from_profile": "현재 프로필 등록만으로 충족을 확인할 수 없음",
+                    "unknown": "요건 의미가 불명확하여 판단 필요", "context_only": "업무 문맥이며 필수 요건 아님"}
+    for group in result["groups"]:
+        joiner = " 또는 " if group["relation"] == "any_of" else " 그리고 "
+        meaning = "하나 이상" if group["relation"] == "any_of" else "모두"
+        st.text(f"{KIND_LABELS[group['requirement_type']]}: {joiner.join(group['skills'])} ({meaning}) — {group_status[group['status']]}")
+        st.caption("프로필 등록 구성원: " + (", ".join(group["profile_has"]) or "없음") +
+                   " / 미등록 구성원: " + (", ".join(group["profile_not_listed"]) or "없음"))
+        if group["requirement_type"] == "preferred":
+            st.caption("우대 조건이며 필수 부족으로 취급하지 않습니다.")
+        with st.expander("그룹 원문 근거 · " + joiner.join(group["skills"])):
+            st.json(group["evidence"])
+    st.subheader("판단 필요 근거")
+    reasons = {"unclassified_evidence": "분류하지 못한 근거", "mixed_classifications": "서로 다른 분류의 근거",
+               "positive_and_negated_evidence": "긍정·부정 근거가 함께 있음", "unclassified_group": "그룹 의미 미확정",
+               "unmapped_evidence": "기술로 연결하지 못한 원문"}
+    for item in result["review"]:
+        with st.expander(f"{item['skill'] or '원문'} · {reasons[item['reason']]}"):
+            st.json(item["evidence"])
+    st.subheader("기타 조건 비교")
+    condition_labels = {"raw_career_condition": "경력", "education": "학력", "employment_type": "고용 형태", "work_region": "지역"}
+    condition_status = {"satisfied": "저장한 필수 조건과 일치", "not_satisfied": "저장한 필수 조건과 불일치",
+                        "preference_match": "선호와 일치", "preference_mismatch": "선호와 불일치 (필수 위반 아님)",
+                        "unknown": "판단 불가 — 원문 또는 비교 가능한 프로필 조건 부족"}
+    for condition in result["conditions"]:
+        st.text(f"{condition_labels[condition['source_field']]}: {condition_status[condition['status']]}")
+        st.caption("공고 원문: " + (condition["raw_text"] or "미제공") +
+                   " / 프로필 선택: " + (", ".join(condition["expected_values"]) or "설정하지 않음"))
