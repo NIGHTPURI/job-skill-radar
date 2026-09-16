@@ -1,5 +1,15 @@
 # Target Architecture — 개인용 Job Intelligence
 
+## Phase 7B 현재 경계 (2026-09-17)
+
+schema v4: 자동 발견 실행/소속을 discovery_storage에 추가했다. 7A 코어의 마지막 저장에만
+실행 기록을 묶고 네트워크 경계는 유지한다. 완성된 실행만 원자적으로 보이므로 프로세스 종료
+중 실행에는 이력이 없을 수 있다. 예상 API 실패는 partial/failed로 저장한다. DB/프로그래밍
+오류는 성공으로 숨기지 않고 전파한다. 파생 비교/shortlist/시장 snapshot은 저장하지 않는다.
+검증된 고정 계획과 안전 category만 저장하며 extra field와 모순된 count/status를 거절한다.
+run의 profile_revision은 계획의 출처이며 현재 프로필과 달라도 과거 값을 바꾸지 않는다.
+
+
 ## Phase 7A 현재 경계 (2026-09-17)
 
 최신 단계는 사용자 정의 자동 발견 Phase 7A다. 지원 추적/점수는 범위 밖이다.

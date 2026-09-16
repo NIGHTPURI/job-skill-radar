@@ -42,14 +42,14 @@ class ProfileMigrationTest(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
         for name, sql in schemas:
             self.assertEqual(self.conn.execute('SELECT sql FROM sqlite_master WHERE name=?', (name,)).fetchone()[0], sql)
-        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 3)
+        self.assertEqual(self.conn.execute('PRAGMA user_version').fetchone()[0], 4)
         self.assertEqual(self.conn.execute('PRAGMA foreign_key_check').fetchall(), [])
         self.assertEqual(self.conn.execute('SELECT * FROM user_profile').fetchall(), [])
 
     def test_v2_backup_restores_exact_source_and_current_reopen_is_idempotent(self):
         old = list(self.conn.iterdump())
         migrations.ensure_schema(self.conn)
-        backup, = Path(self.tmp.name).glob('v2.sqlite.pre-v3-from-v2-*.bak')
+        backup, = Path(self.tmp.name).glob('v2.sqlite.pre-v4-from-v2-*.bak')
         with closing(sqlite3.connect(backup)) as conn:
             self.assertEqual(list(conn.iterdump()), old)
             self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 2)
@@ -80,7 +80,7 @@ class ProfileMigrationTest(unittest.TestCase):
                 self.assertEqual(list(conn.iterdump()), before)
                 self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], version)
                 migrations.ensure_schema(conn)
-                self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 3)
+                self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 4)
                 self.assertEqual(conn.execute('SELECT created_at FROM job_postings').fetchone()[0], '2000-01-01')
 
     def test_backup_failure_aborts_v2_upgrade_without_changes(self):
@@ -115,7 +115,7 @@ class ProfileMigrationTest(unittest.TestCase):
         path = Path(self.tmp.name) / 'fresh.sqlite'
         self.assertIsNone(load_profile_from_db(path))
         with closing(sqlite3.connect(path)) as conn:
-            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 3)
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 4)
             self.assertEqual(conn.execute('SELECT * FROM user_profile').fetchall(), [])
         self.assertEqual(list(Path(self.tmp.name).glob('*.bak')), [])
 

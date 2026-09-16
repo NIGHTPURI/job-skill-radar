@@ -68,11 +68,11 @@ class ProfileUiTest(unittest.TestCase):
             conn.execute("INSERT INTO job_postings(source,posting_id,title,created_at) VALUES ('work24','one','SQL','2000-01-01')")
         app = self.app()
         self.assertFalse(app.exception)
-        self.assertEqual(len(list(self.path.parent.glob('*.pre-v3-from-v2-*.bak'))), 1)
+        self.assertEqual(len(list(self.path.parent.glob('*.pre-v4-from-v2-*.bak'))), 1)
         self.assertFalse(self.app().exception)
         self.assertEqual(len(list(self.path.parent.glob('*.bak'))), 1)
         with sqlite3.connect(self.path) as conn:
-            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 3)
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 4)
             self.assertEqual(conn.execute('SELECT created_at FROM job_postings').fetchone()[0], '2000-01-01')
 
 

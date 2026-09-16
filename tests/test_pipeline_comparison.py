@@ -111,9 +111,9 @@ class ComparisonPipelineTest(unittest.TestCase):
         self.compare('manual', identity)
         self.assertEqual(pipeline.load_market_analysis('DB 우선', db_path=self.path), before)
         with closing(storage.connect(self.path)) as conn:
-            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 3)
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 4)
             self.assertEqual(conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall(),
-                             [('job_postings',), ('posting_details',), ('posting_skills',), ('user_profile',)])
+                             [('discovery_run_postings',), ('discovery_runs',), ('job_postings',), ('posting_details',), ('posting_skills',), ('user_profile',)])
 
 
 if __name__ == '__main__':

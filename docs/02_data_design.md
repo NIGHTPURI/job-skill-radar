@@ -1,5 +1,29 @@
 # 데이터 설계
 
+## Phase 7B 실행 이력·schema v4 (2026-09-17)
+
+7A의 비영속 실행 한계를 대체한다. `discovery_runs`는 run_id TEXT PK, source=work24,
+profile_revision, UTC started_at/completed_at, completed/partial/failed status, report JSON이다.
+report에는 검색 계획/예산/집계/안전한 실패 category가 있으며 인증키·예외 문자열·응답 본문은 없다.
+`discovery_run_postings`는 PK(run_id,source,posting_id), was_new 0/1, queries JSON을 저장한다.
+run FK는 DELETE CASCADE, 공고 복합 FK는 DELETE RESTRICT다. 과거 소속/집계가 공고 삭제로
+조용히 달라지는 것을 막는다. 수동 공고 FK/상세 CASCADE는 기존 그대로다. 삭제 UI는 없다.
+
+NEW는 이 실행 저장 직전 같은 identity가 로컬 DB에 없었다는 뜻이다. 고용주 등록일이나 오늘
+게시 여부가 아니다. BEGIN IMMEDIATE 안에서 신규 판정→공고/상세→실행/소속을 원자적으로
+저장한다. 멤버십 저장 실패도 전체 rollback한다. HTTP는 그 전에 끝나며 동시 수집이 먼저
+저장한 identity는 KNOWN이다. 회원가입/전체 프로필 복사/시장 snapshot/파생 요건 저장은 없다.
+latest는 completed_at DESC, run_id DESC로 결정한다. 이력 조회는 기본20·최대100 실행이다.
+공고는 identity당 한 행이고 실행 소속은 실행당 한 행이다. 실행 기록은 의도적으로 누적된다.
+현재 상세와 현재 프로필을 사용한 비교는 과거 실행 당시의 비교 snapshot이 아니다.
+
+v3→v4는 두 테이블/최근 완료 index만 추가한다. fresh/v0/v1/v2/v3→v4와 v4 재개방을 지원한다.
+기존 공고·기술·raw 상세·profile revision/preferences·created_at/fetched_at은 보존한다.
+v0 기술 재구성은 기존 정책을 유지한다. 파일 이전 전에 pre-v4-from-vN-고유값.bak을 만들고
+실패 시 중단, 마지막 DDL 실패는 schema/version/data 모두 rollback한다. fresh/memory/current
+DB는 백업하지 않고 기존 백업을 덮어쓰지 않는다. 이전 앱/다른 writer 종료 후 첫 실행한다.
+
+
 ## Phase 7A 자동 검색 코어 (2026-09-17)
 
 사용자 정의 Phase 7은 자동 공고 발견이며 과거 지원 추적 번호를 대체한다. schema v3 유지,

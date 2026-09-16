@@ -1,5 +1,15 @@
 # Phase 1A — Regression Test Baseline
 
+## Phase 7B 검증 (2026-09-17)
+
+전체424개 통과(7A412 + 실행 저장8 + v4이전4). discovery 집중29개가 통과한다.
+기존 검사는 현재 schema 기대값을4·테이블 목록·pre-v4 백업명으로만 갱신했다.
+fresh/v0/v1/v2/v3→v4, 기존4테이블 쓰기 차단 trigger 상태에서도 보존, 마지막 DDL 실패
+rollback, 이전 백업 복구/비덮어쓰기/재개방·FK를 검증한다. 반복 신규 수·원자적 소속·revision·
+partial/failed/empty·안전 실패 JSON·저장 직전 신규 판정도 검증한다.
+전체/이전/저장 집중 회귀·요건 평가60/60·샘플 CLI·diff check 통과. 실제 사용자 DB 미사용.
+
+
 ## Phase 7A 검증 (2026-09-17)
 
 시작 64d7511, 로컬/원격 동일·clean, 395개 통과. 새 discovery 테스트17개로 총412개다.

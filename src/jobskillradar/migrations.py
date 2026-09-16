@@ -1,4 +1,4 @@
-"""Transactional SQLite upgrades v0 -> v1 -> v2 -> v3, with pre-migration backups."""
+"""Transactional SQLite upgrades v0 -> v1 -> v2 -> v3 -> v4, with pre-migration backups."""
 from __future__ import annotations
 
 import logging
@@ -10,7 +10,7 @@ from pathlib import Path
 from .models import DETAIL_FIELDS, POSTING_FIELDS
 from .skill_extractor import extract_skills
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +66,9 @@ def _check_layout(conn: sqlite3.Connection, version: int) -> None:
     if version >= 3:
         expected["user_profile"] = ({"singleton", "revision", "owned_skills", "target_roles",
                                      "preferred_regions", "required_regions"}, ["singleton"])
+    if version >= 4:
+        expected["discovery_runs"] = ({"run_id", "source", "profile_revision", "started_at", "completed_at", "status", "report"}, ["run_id"])
+        expected["discovery_run_postings"] = ({"run_id", "source", "posting_id", "was_new", "queries"}, ["run_id", "source", "posting_id"])
     for table, (names, primary_key) in expected.items():
         columns = conn.execute(f"PRAGMA table_info({table})").fetchall()
         keys = [row[1] for row in sorted(columns, key=lambda row: row[5]) if row[5]]
@@ -77,6 +80,8 @@ def _check_layout(conn: sqlite3.Connection, version: int) -> None:
                 "posting_skills": {"source", "posting_id", "skill"},
                 "posting_details": {"source", "posting_id", "keywords", "fetched_at"},
                 "user_profile": {"revision", "owned_skills", "target_roles", "preferred_regions", "required_regions"},
+                "discovery_runs": {"run_id", "source", "profile_revision", "started_at", "completed_at", "status", "report"},
+                "discovery_run_postings": {"run_id", "source", "posting_id", "was_new", "queries"},
             }[table]
             if not required <= {row[1] for row in columns if row[3]}:
                 raise RuntimeError(f"Missing NOT NULL constraints in {table}")
@@ -88,6 +93,38 @@ def _check_layout(conn: sqlite3.Connection, version: int) -> None:
                 (0, 1, "job_postings", "posting_id", "posting_id", "CASCADE"),
             }:
                 raise RuntimeError(f"Invalid {table} foreign key")
+
+    if version >= 4:
+        keys = conn.execute("PRAGMA foreign_key_list(discovery_run_postings)").fetchall()
+        groups = {}
+        for row in keys:
+            groups.setdefault(row[0], []).append((row[1], row[2], row[3], row[4], row[6]))
+        if {tuple(sorted(rows)) for rows in groups.values()} != {
+            ((0, "discovery_runs", "run_id", "run_id", "CASCADE"),),
+            ((0, "job_postings", "source", "source", "RESTRICT"),
+             (1, "job_postings", "posting_id", "posting_id", "RESTRICT")),
+        }:
+            raise RuntimeError("Invalid discovery membership foreign keys")
+
+
+def _create_discovery_tables(conn: sqlite3.Connection) -> None:
+    conn.execute("""CREATE TABLE discovery_runs (
+        run_id TEXT NOT NULL PRIMARY KEY,
+        source TEXT NOT NULL CHECK(source = 'work24'),
+        profile_revision INTEGER NOT NULL CHECK(profile_revision >= 1),
+        started_at TEXT NOT NULL, completed_at TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('completed', 'partial', 'failed')),
+        report TEXT NOT NULL
+    )""")
+    conn.execute("""CREATE TABLE discovery_run_postings (
+        run_id TEXT NOT NULL, source TEXT NOT NULL CHECK(source = 'work24'),
+        posting_id TEXT NOT NULL, was_new INTEGER NOT NULL CHECK(was_new IN (0, 1)),
+        queries TEXT NOT NULL,
+        PRIMARY KEY(run_id, source, posting_id),
+        FOREIGN KEY(run_id) REFERENCES discovery_runs(run_id) ON DELETE CASCADE,
+        FOREIGN KEY(source, posting_id) REFERENCES job_postings(source, posting_id) ON DELETE RESTRICT
+    )""")
+    conn.execute("CREATE INDEX discovery_runs_completed ON discovery_runs(completed_at DESC, run_id DESC)")
 
 
 def _create_detail_table(conn: sqlite3.Connection) -> None:
@@ -176,7 +213,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     if version == SCHEMA_VERSION:
         _check_layout(conn, version)
         return
-    if version not in (0, 1, 2):
+    if version not in (0, 1, 2, 3):
         raise RuntimeError(f"Unsupported schema version: {version}")
     if conn.in_transaction:
         raise RuntimeError("Schema initialization requires no active transaction")
@@ -194,9 +231,13 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             raise RuntimeError("Unexpected posting_details table in v1; database left unchanged")
     elif version == 2:
         _check_layout(conn, 2)
-    if "user_profile" in tables:
+    elif version == 3:
+        _check_layout(conn, 3)
+    if version < 3 and "user_profile" in tables:
         raise RuntimeError("Unexpected user_profile table before v3; database left unchanged")
-    if legacy or version in (1, 2):
+    if {"discovery_runs", "discovery_run_postings"} & tables:
+        raise RuntimeError("Unexpected discovery tables before v4; database left unchanged")
+    if legacy or version in (1, 2, 3):
         _backup_database(conn)
     conn.execute("BEGIN IMMEDIATE")
     report = None
@@ -206,7 +247,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         if locked_version == SCHEMA_VERSION:
             _check_layout(conn, SCHEMA_VERSION)
         else:
-            if locked_version not in (0, 1, 2):
+            if locked_version not in (0, 1, 2, 3):
                 raise RuntimeError(f"Unsupported schema version: {locked_version}")
             if locked_version == 0:
                 if legacy:
@@ -219,7 +260,10 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
                 _create_detail_table(conn)
             _check_layout(conn, 2)
             # v2 -> v3 is additive; all raw posting data stays untouched.
-            _create_profile_table(conn)
+            if locked_version <= 2:
+                _create_profile_table(conn)
+            _check_layout(conn, 3)
+            _create_discovery_tables(conn)
             _check_layout(conn, SCHEMA_VERSION)
             if conn.execute("PRAGMA foreign_key_check").fetchall():
                 raise RuntimeError("Foreign key validation failed")

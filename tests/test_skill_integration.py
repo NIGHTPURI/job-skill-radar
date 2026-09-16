@@ -37,7 +37,7 @@ class SkillIntegrationTest(unittest.TestCase):
         ])
         analysis = analyze_postings(load_postings(self.conn))
         self.assertEqual(analysis["skill_counts"], {"Kotlin": 1, "GitHub Actions": 1, "JUnit": 1})
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 3)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 4)
         self.assertEqual(self.conn.execute("PRAGMA foreign_key_check").fetchall(), [])
 
     def test_new_skill_insert_failure_preserves_previous_representation(self):
@@ -77,7 +77,7 @@ class SkillIntegrationTest(unittest.TestCase):
         with self.assertLogs("jobskillradar.migrations", level="WARNING"):
             ensure_schema(self.conn)
         self.assertEqual(self.skills(), [("test", "1", "Python"), ("test", "1", "Spring Boot")])
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 3)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 4)
         self.assertEqual(self.conn.execute("SELECT created_at FROM job_postings").fetchone()[0],
                          "2000-01-01T00:00:00")
         self.assertEqual(self.conn.execute("PRAGMA foreign_key_check").fetchall(), [])
