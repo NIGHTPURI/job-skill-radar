@@ -1,5 +1,27 @@
 # 데이터 설계
 
+## Phase 4A 수동 공고 계약 (2026-09-17)
+
+최신 기능은 수동 등록·목록·상세·수정이다. 아래 이전 Phase의 미구현 표시는 당시 기록이다.
+`manual` source와 UUID identity를 사용하며 같은 제목/회사도 별도 공고다. 생성 시 충돌을 거절하고
+수정은 기존 manual identity만 허용한다. Work24 소유 공고는 수정 API와 UI 모두에서 보호한다.
+필수 입력은 company/title/body, 선택 입력은 URL·지역·경력·학력·마감일 원문이다.
+본문은 description에 넣지 않고 posting_details.job_content에 공백·줄바꿈까지 보존한다.
+선택 원문은 해당 detail 필드에 두고 목록의 지역/경력만 기존 정규화를 사용한다. 미입력 상세는
+None/빈 keywords이며 Work24 전용 값을 생성하지 않는다. manual의 fetched_at은 HTTP 관측이
+아닌 성공한 로컬 원문 capture/update UTC 시각이다. created_at과 identity는 수정해도 유지한다.
+
+schema v2를 그대로 쓴다. 저장 경계가 schema 확인 후 BEGIN IMMEDIATE로 존재/충돌 검사와
+공고·기술·상세 쓰기를 한 transaction으로 묶는다. 상세 실패는 부모/기술 변경까지 rollback한다.
+조회는 한 read snapshot에서 목록·상세를 읽고 연결 종료 후 기존 버전 2 추출기로 재계산한다.
+삭제·스크래핑·추출 규칙 변경·파생 저장은 추가하지 않았다.
+
+시장 dashboard는 load_market_analysis로 source=work24만 집계하고 없으면 ‘샘플’로 표시한다.
+기존 load_db_analysis도 manual은 제외하며 선택적 sources whitelist를 받는다. 범용 순수
+analyzer/recommender 규칙은 그대로다. 저장 공고 목록은 수동/고용24/샘플을 출처와 함께 보여준다.
+UI는 원문·네 품질 상태·네 분류·any_of/all_of·근거/위치를 표시한다. 빈 required를 요건 부재로
+표현하지 않고 any_of는 ‘또는 — 하나 이상’의 단일 조건으로 표시한다.
+
 ## Phase 3C 요건 의미 보강·평가 계약
 
 2026-09-17 완료. 아래 Phase 3B 기록 중 접속·대안·제목·추출기 버전 설명은 이 절이 대체한다.

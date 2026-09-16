@@ -1,8 +1,18 @@
 # Target Architecture — 개인용 Job Intelligence
 
-최신 상태: Phase 3C 요건 의미 보강·fixture 평가를 완료했다(2026-09-17).
+## Phase 4A 실제 구현 경계 (2026-09-17)
+
+현재 수동 공고 흐름은 app → review_ui → pipeline create/update/list/review → storage다.
+manual_postings는 입력 검증과 원문/list 표현 생성만 담당한다. Streamlit에는 SQL이 없다.
+수동 공고의 두 테이블 쓰기는 원자적이며 조회 연결 종료 후 기존 requirement extractor를 쓴다.
+schema v2·추출기 v2·그룹 의미·원문 보존·고용24 수집 경계는 유지한다.
+시장 화면만 명시적으로 Work24 범위를 선택한다. 수동 공고는 개별 검토 자료이고 표본 시장
+빈도로 자동 편입하지 않는다. 회사/제목/본문 등록→영속 목록→원문/구조화 요건→동일 ID 수정이
+가능하다. 실 UI 테스트와 bounded headless 서버 smoke를 수행했다. 삭제는 이번 범위에 없다.
+
+이하 Phase 3C 완료 당시 기록(2026-09-17). 최신 기능은 위 Phase 4A 경계를 따른다.
 Phase 3A 원문 수집·schema v2와 기존 시장 추출·분류·추천·경력 정규화는 유지한다.
-최신 계약은 [데이터 설계](02_data_design.md#phase-3c-요건-의미-보강평가-계약),
+Phase 3C 계약은 [데이터 설계](02_data_design.md#phase-3c-요건-의미-보강평가-계약),
 검증은 [테스트 기준선](TEST_BASELINE.md#phase-3c-검증-2026-09-17)을 따른다. Phase 4 이상은 미시작이다.
 아래 이전 단계 기록과 장기 구조는 당시 현황·설계 제안이다.
 

@@ -1,6 +1,16 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
-상태: Phase 0·1A·1B·1C·2A·2B·2C·2D·3A·3B·3C 완료. **Phase 4 이상은 시작하지 않았다.** 아래 단계별 완료 기록이 과거 제안보다 우선한다.
+## Phase 4A 완료 기록 — Manual Job Posting Workflow (2026-09-17)
+
+- 시작 212ad8d, clean, 328 tests 및 requirement 평가 통과. 수동 공고는 manual/UUID를 사용한다.
+- 생성·수정·재시작 조회, 원문 그대로 저장, Work24 수정 차단, 두 테이블 atomic 쓰기를 구현했다.
+- Streamlit의 공고 직접 등록/공고 목록/시장 분석을 분리했다. any_of는 단일 선택 조건이다.
+- 고용24만 dashboard 시장 집계에 포함하고 샘플은 명시적으로 표시한다. manual은 집계에서 제외한다.
+- schema v2, 추출기 v2, 새 migration 없음. 345개 테스트·60개 평가 사례 통과.
+- AppTest로 등록/재시작/수정/부정확한 빈 요건 표현 방지를 검사하고 headless 서버를 자동 종료했다.
+- 삭제·스크래핑은 제외했다. 이 기록 이후의 Phase 진행은 별도 완료 기록을 따른다.
+
+아래는 Phase 3C까지의 과거 계획이다. 현재 Phase 4A 완료 기록이 우선한다. 아래 단계별 완료 기록이 과거 제안보다 우선한다.
 근거는 [REFACTORING_AUDIT.md](REFACTORING_AUDIT.md), 목표 경계는 [TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md)에 있다.
 
 ## 공통 완료 조건

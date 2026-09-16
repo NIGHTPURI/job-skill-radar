@@ -169,3 +169,36 @@ def save_posting_details_to_db(db_path: Path, details: list[PostingDetail]) -> N
 def load_posting_detail_from_db(db_path: Path, source: str, posting_id: str) -> PostingDetail | None:
     with closing(connect(db_path)) as conn:
         return load_posting_detail(conn, source, posting_id)
+
+
+def save_manual_bundle_to_db(db_path: Path, posting: JobPosting, detail: PostingDetail, *, create: bool) -> None:
+    """Own one atomic manual-only create/edit, including collision/existence checks."""
+    identity = (posting.get("source"), posting.get("posting_id"))
+    validate_identity(*identity)
+    if identity[0] != "manual" or identity != (detail.get("source"), detail.get("posting_id")):
+        raise ValueError("Only matching manual posting identities can be saved")
+    with closing(connect(db_path)) as conn:
+        ensure_schema(conn)
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            exists = conn.execute("SELECT 1 FROM job_postings WHERE source=? AND posting_id=?", identity).fetchone()
+            if create and exists:
+                raise ValueError("Manual posting identity already exists")
+            if not create and not exists:
+                raise ValueError("Manual posting does not exist")
+            save_postings(conn, [posting])
+            save_posting_details(conn, [detail])
+
+
+def load_posting_bundle_from_db(db_path: Path, source: str, posting_id: str) -> tuple[JobPosting, PostingDetail | None]:
+    """Read metadata and detail from one SQLite snapshot; close before derivation."""
+    validate_identity(source, posting_id)
+    with closing(connect(db_path)) as conn:
+        ensure_schema(conn)
+        with conn:
+            conn.execute("BEGIN")
+            row = conn.execute(f"SELECT {', '.join(POSTING_FIELDS)} FROM job_postings WHERE source=? AND posting_id=?",
+                               (source, posting_id)).fetchone()
+            if row is None:
+                raise ValueError("Posting does not exist")
+            return cast(JobPosting, dict(zip(POSTING_FIELDS, row))), load_posting_detail(conn, source, posting_id)

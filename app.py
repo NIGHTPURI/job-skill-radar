@@ -14,7 +14,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from jobskillradar.analyzer import ROLE_LABELS
 from jobskillradar.config import get_db_path, get_work24_auth_key
 from jobskillradar.models import AnalysisResult
-from jobskillradar.pipeline import collect_work24_to_db, load_analysis as select_analysis, seed_sample_db
+from jobskillradar.pipeline import collect_work24_to_db, load_market_analysis as select_analysis, seed_sample_db
+from jobskillradar.review_ui import render_manual_create, render_posting_browser
 from jobskillradar.recommender import recommend_skills
 from jobskillradar.role_classifier import UNKNOWN
 
@@ -33,6 +34,17 @@ def load_analysis(mode: str) -> tuple[AnalysisResult, str]:
 
 
 st.title("Job Skill Radar")
+
+if next_navigation := st.session_state.pop("next_navigation", None):
+    st.session_state["navigation"] = next_navigation
+navigation = st.sidebar.radio("화면", ["공고 목록", "공고 직접 등록", "시장 분석"], key="navigation")
+if navigation == "공고 직접 등록":
+    render_manual_create()
+    st.stop()
+if navigation == "공고 목록":
+    render_posting_browser()
+    st.stop()
+st.caption("시장 분석은 저장된 고용24 공고만 사용합니다. 데이터가 없으면 샘플로 표시합니다. 직접 등록한 공고는 제외됩니다.")
 
 with st.sidebar:
     st.header("데이터")

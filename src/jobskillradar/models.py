@@ -91,7 +91,7 @@ class DetailEvidence(TypedDict):
 
 
 class PostingDetail(DetailEvidence):
-    fetched_at: str  # UTC ISO 8601; added only after a successful fetch.
+    fetched_at: str  # UTC ISO 8601; successful fetch, or local manual capture/update.
 
 
 DETAIL_TEXT_FIELDS = tuple(

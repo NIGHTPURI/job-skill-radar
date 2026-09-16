@@ -1,6 +1,23 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 3C 검증](#phase-3c-검증-2026-09-17)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
+## Phase 4A 검증 (2026-09-17)
+
+212ad8d의 328개에서 **345개 전부 통과**로 확장했다. 실패/오류/expected failure/skip은 0.
+신규 manual workflow 14개, Streamlit AppTest 3개다. 기존 Phase 3C 60/60사례·144/144분류·
+13/13그룹 및 required/preferred 오탐 0을 유지한다. sample CLI 12건·기존 추천·exit 0도 유지한다.
+
+생성 최소/선택 필드, UUID/충돌/재시작, 원문 공백·CRLF, 입력 검증, 동일 identity/created_at 수정,
+본문 수정 후 재추출, Work24 수정 차단, create/edit 실패 rollback, source 격리, source별 시장
+범위, 품질 상태와 any_of, DB 연결 종료 후 추출을 검사한다. UI는 실제 app.py를 AppTest로
+실행해 생성→목록 이동→새 세션→수정, 입력 실패 시 draft 보존, Work24 수정 UI 부재,
+manual만 저장됐을 때 샘플 시장 표시를 확인했다. 테스트는 임시 DB와 차단된 HTTP를 쓴다.
+
+전체 unittest, test_manual*.py, evaluate_requirements.py, run_demo.py, diff --check를 실행했다.
+로컬 소켓은 샌드박스에서 차단되어 허용된 headless smoke 실행으로 127.0.0.1의 Streamlit health
+응답을 확인하고 프로세스를 종료했다. AppTest가 실제 script/DB 초기화를 검증하며 단순 health
+응답만으로 UI 동작을 검증했다고 주장하지 않는다. 실 Work24 네트워크는 사용하지 않았다.
+
+이하 기록은 [Phase 3C 검증](#phase-3c-검증-2026-09-17)까지의 이전 기준선이다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.

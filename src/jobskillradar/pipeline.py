@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from datetime import datetime, timezone
+from uuid import uuid4
 
 from .analyzer import analyze_postings
 from .config import get_db_path
@@ -9,6 +11,8 @@ from .models import AnalysisResult, CollectionResult, JobPosting, PostingDetail,
 from .normalizer import clean_postings
 from .sample_data import SAMPLE_POSTINGS
 from .requirement_extractor import extract_requirements
+from .manual_postings import build_manual_posting
+from .storage import load_posting_bundle_from_db, save_manual_bundle_to_db
 from .storage import load_posting_detail_from_db, load_postings_from_db, save_posting_details_to_db, save_postings_to_db
 from .work24_client import Work24Error, fetch_posting_detail, fetch_work24_postings
 
@@ -45,11 +49,49 @@ def analyze_sample() -> AnalysisResult:
     return analyze_postings(clean_postings(SAMPLE_POSTINGS))
 
 
-def load_db_analysis(*, db_path: Path | None = None) -> AnalysisResult | None:
+def load_db_analysis(*, db_path: Path | None = None, sources: tuple[str, ...] | None = None) -> AnalysisResult | None:
     postings = load_postings_from_db(get_db_path() if db_path is None else db_path)
+    # Manual selections are individual review material, never implicit market data.
+    postings = [p for p in postings if p["source"] != "manual" and (sources is None or p["source"] in sources)]
     if not postings:
         return None
     return analyze_postings(clean_postings(postings))
+
+
+def load_market_analysis(mode: str, *, db_path: Path | None = None) -> tuple[AnalysisResult, str]:
+    """Dashboard scope: Work24 only; otherwise explicitly labeled sample data."""
+    if mode == "DB 우선":
+        analysis = load_db_analysis(db_path=db_path, sources=("work24",))
+        if analysis is not None:
+            return analysis, "고용24"
+    return analyze_sample(), "샘플"
+
+
+def list_saved_postings(*, db_path: Path | None = None) -> list[JobPosting]:
+    return load_postings_from_db(get_db_path() if db_path is None else db_path)
+
+
+def load_posting_review(source: str, posting_id: str, *, db_path: Path | None = None) -> dict:
+    posting, detail = load_posting_bundle_from_db(get_db_path() if db_path is None else db_path, source, posting_id)
+    extraction = extract_requirements(detail)
+    return {"posting": posting, "detail": detail,
+            "requirements": {**extraction, "source": source, "posting_id": posting_id}}
+
+
+def create_manual_posting(*, db_path: Path | None = None, id_factory: Callable[[], str] | None = None,
+                          captured_at: str | None = None, **fields) -> str:
+    posting_id = str(uuid4()) if id_factory is None else id_factory()
+    posting, detail = build_manual_posting(posting_id, captured_at or datetime.now(timezone.utc).isoformat(), **fields)
+    save_manual_bundle_to_db(get_db_path() if db_path is None else db_path, posting, detail, create=True)
+    return posting_id
+
+
+def update_manual_posting(source: str, posting_id: str, *, db_path: Path | None = None,
+                          captured_at: str | None = None, **fields) -> None:
+    if source != "manual":
+        raise ValueError("Only manual postings can be edited")
+    posting, detail = build_manual_posting(posting_id, captured_at or datetime.now(timezone.utc).isoformat(), **fields)
+    save_manual_bundle_to_db(get_db_path() if db_path is None else db_path, posting, detail, create=False)
 
 
 def load_analysis(mode: str, *, db_path: Path | None = None) -> tuple[AnalysisResult, str]:
