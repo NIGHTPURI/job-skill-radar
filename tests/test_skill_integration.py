@@ -37,7 +37,7 @@ class SkillIntegrationTest(unittest.TestCase):
         ])
         analysis = analyze_postings(load_postings(self.conn))
         self.assertEqual(analysis["skill_counts"], {"Kotlin": 1, "GitHub Actions": 1, "JUnit": 1})
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 1)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 2)
         self.assertEqual(self.conn.execute("PRAGMA foreign_key_check").fetchall(), [])
 
     def test_new_skill_insert_failure_preserves_previous_representation(self):
@@ -51,7 +51,7 @@ class SkillIntegrationTest(unittest.TestCase):
         self.assertEqual(list(self.conn.iterdump()), before)
         self.assertFalse(self.conn.in_transaction)
 
-    def test_existing_v1_skills_are_unchanged_on_read_and_refreshed_on_save(self):
+    def test_existing_skills_are_unchanged_on_read_and_refreshed_on_save(self):
         base = {"source": "test", "posting_id": "1", "title": "Python. SpringBoot R&D"}
         save_postings(self.conn, [base])
         # Represent the old extractor's persisted result, without auto backfill.
@@ -66,7 +66,7 @@ class SkillIntegrationTest(unittest.TestCase):
         self.assertEqual(save_postings(self.conn, [base]), 0)
         self.assertEqual(self.skills(), [("test", "1", "Python"), ("test", "1", "Spring Boot")])
 
-    def test_legacy_migration_uses_current_extractor_without_new_schema(self):
+    def test_legacy_migration_uses_current_extractor(self):
         schema = Path(__file__).parent / "fixtures" / "legacy_schema.sql"
         self.conn.executescript(schema.read_text(encoding="utf-8"))
         self.conn.execute("""INSERT INTO job_postings
@@ -77,7 +77,7 @@ class SkillIntegrationTest(unittest.TestCase):
         with self.assertLogs("jobskillradar.migrations", level="WARNING"):
             ensure_schema(self.conn)
         self.assertEqual(self.skills(), [("test", "1", "Python"), ("test", "1", "Spring Boot")])
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 1)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 2)
         self.assertEqual(self.conn.execute("SELECT created_at FROM job_postings").fetchone()[0],
                          "2000-01-01T00:00:00")
         self.assertEqual(self.conn.execute("PRAGMA foreign_key_check").fetchall(), [])

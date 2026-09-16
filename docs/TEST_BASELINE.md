@@ -1,6 +1,6 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 2D 검증](#phase-2d-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
+최신 결과는 문서 끝의 [Phase 3A 검증](#phase-3a-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
@@ -390,3 +390,98 @@ Phase 2C와 동일하다. 실 API·실사용 DB·UI 실행은 이번 검증에 �
 변경하지 않았다. 이미 잘못 축약해 저장한 경력 값은 추정 복원하지 않는다.
 canonical 정책은 [데이터 설계](02_data_design.md#phase-2d-경력-정규화-계약)를 따른다.
 Phase 2D에서 종료하며 Work24 상세 수집과 Phase 3는 시작하지 않았다.
+
+## Phase 3A 검증 (2026-09-16)
+
+브랜치 `refactor/v2`, 시작 HEAD `e6a53c4` (`fix: correct career normalization semantics`).
+시작 작업 트리에는 tracked 11개 수정(394 insertions/44 deletions)과 untracked 4개가 있었다.
+상세 계약·요청·파서·v2 DDL/이전·저장·pipeline·CLI와 상세 fixture/test가 이미 구현되어 있었다.
+reset/checkout/reclone 없이 이를 이어서 검토·보완했다. `git diff --check`는 시작부터 통과했다.
+
+마지막 커밋 기준선은 226개 모두 통과였고, 재개 시 실제 미커밋 상태는 **248개 모두 통과**였다.
+최종은 **275개 모두 통과**, expected failures/failures/errors/skips/unexpected successes 모두 0이다.
+환경은 Linux, Python 3.12.3, unittest/SQLite/mock이다. 전체 최종 실행 시간은 2.548초이며
+환경에 따라 달라진다. subTest 입력 조합은 개수에 별도로 더하지 않았다.
+
+| 최종 검증 | 결과 |
+|---|---|
+| 전체 unittest | 275/275 통과 |
+| Work24 목록/client | 18/18 통과 |
+| Work24 상세 parser | 14/14 통과 |
+| Work24 상세 client | 9/9 통과 |
+| migration | 19/19 통과 |
+| storage + storage boundary | 16/16 통과 |
+| 상세 persistence/path boundary | 7/7 통과 |
+| 기존 persistence integrity | 15/15 통과 |
+| pipeline + detail pipeline | 16/16 통과 |
+| normalizer | 11/11 통과 |
+| skill extractor | 42/42 통과 |
+| role classifier | 34/34 통과 |
+| recommender | 24/24 통과 |
+| collection CLI | 4/4 통과 |
+| sample CLI | 12건, 기존 집계·추천 순서, exit 0 |
+| git diff --check | 공백 오류 없음, exit 0 |
+
+실행 명령:
+
+```bash
+python -B -m unittest discover -s tests
+python -B -m unittest discover -s tests -p 'test_work24*.py'
+python -B -m unittest discover -s tests -p test_migrations.py
+python -B -m unittest discover -s tests -p 'test_storage*.py'
+python -B -m unittest discover -s tests -p test_posting_details.py
+python -B -m unittest discover -s tests -p test_persistence_integrity.py
+python -B -m unittest discover -s tests -p 'test_pipeline*.py'
+python -B -m unittest discover -s tests -p test_normalizer.py
+python -B -m unittest discover -s tests -p test_skill_extractor.py
+python -B -m unittest discover -s tests -p test_role_classifier.py
+python -B -m unittest discover -s tests -p test_recommender.py
+python -B -m unittest discover -s tests -p test_collect_work24_cli.py
+python -B scripts/run_demo.py
+git diff --check
+git status
+```
+
+상세 parser는 공식 문서의 계층을 따르는 합성 fixture로 선택 20개 원문 필드·nullable 값,
+줄바꿈·CDATA·namespace·keyword 순서/중복·잘못된 계층·오류 응답을 검증한다.
+request 테스트는 endpoint·authKey/wantedAuthNo/callTp/returnType/infoSvc·timeout·UTF-8·identity·UTC
+시각을 확인한다. HTTP/timeout/불완전 read/encoding/API 오류는 safe category로 분류하고
+키·응답 본문이 exception/traceback/CLI/failure reason에 실리지 않도록 검증했다.
+새 목록 보안 테스트에서 호출 소스 줄에 쓴 가짜 키 리터럴이 traceback에 나타나는 테스트 오류가
+한 번 있었으며, 실제 호출처럼 변수로 전달하도록 고쳤다. 운영 예외의 민감한 context 노출은 없다.
+
+KD-09 기존 오류 XML 테스트는 정상 빈 목록과 오류를 구분하는 회귀 테스트로 전환했다.
+예상 밖 목록 envelope와 malformed XML은 안전한 오류를 반환하고 namespace 목록을 지원한다.
+error/errorCode/errorCd 인식은 방어적인 합성 사례이며 미확인 공식 오류 코드 표를 만들지 않았다.
+목록 함수의 성공 반환 계약·페이지 요청 수는 유지하되 실패 예외 타입은 Work24Error로 통일했다.
+
+신규 `test_posting_details.py`는 첫 저장/조회, 동일·변경 refresh, 새 fetched_at, NULL·JSON keywords,
+유효성 검증, orphan과 잘못된 source, 복합 identity/CASCADE, 배치 rollback, caller transaction,
+path 재개방과 성공/실패 연결 종료를 검사한다. 기존 job_postings/skills/created_at도 유지된다.
+
+`test_migrations.py`에 추가한 v1 fixture는 Phase 2D schema를 고정했다. 기존 두 테이블의
+모든 INSERT/UPDATE/DELETE를 거절하는 trigger로 v1→v2의 추가 이전을 확인한다.
+과거 추출값/수동 기술도 그대로 남는다. v0→v2 공고·created_at 보존 및 기존 기술 재구성,
+v0의 최종 v2 DDL 실패와 v1 DDL 실패 rollback, fresh→v2, v2 재개방을 검증했다.
+파일 백업의 원본 dump/user_version/integrity, 복사본 복원, 실패 시 migration 중단,
+불완전 백업 제거, 재시도 시 새 백업과 기존 파일 불변, 현재 DB 추가 백업 부재도 확인했다.
+
+`test_pipeline_details.py`는 20개 목록/19개 상세 성공/1개 실패와 이후 failed refresh의 이전 상세·
+fetched_at 보존을 별도로 검증한다. 다른 identity의 성공은 계속 저장한다. 키워드 간 중복은
+정제 후 한 번만 요청한다. HTTP boundary에서 이전 storage 연결이 모두 닫혔음을 확인하고
+별도 SQLite writer가 즉시 BEGIN IMMEDIATE를 획득하며 전체 목록을 볼 수 있음을 검사한다.
+상세만의 기술·직무·경력 문자열을 넣어도 저장 기술·분석·추천·정규화 career가 바뀌지 않는다.
+
+CLI 테스트는 실제 CLI→pipeline→임시 DB와 mocked HTTP를 연결한다. 기본 목록 전용 exit 0,
+상세 전체 성공 exit 0, 상세 부분 실패 exit 2 및 성공 데이터 보존, 목록 실패 exit 1과 안전한
+출력을 확인한다. 자동 테스트는 실 네트워크·API 키·사용자 DB를 사용하지 않는다.
+
+샘플 CLI는 12건, 데이터 분석가 6/ML 3/데이터 엔지니어 2/BI 1이며 SQL 보유 분석가의 추천은
+Python(5/6) → A/B Test(2/6) → Tableau(2/6) → Statistics(1/6) → GA4(1/6)다.
+추출기·분류기·추천기·정규화기 운영 코드는 수정하지 않았다.
+
+실 API smoke·사용자 실제 DB migration·UI·동시 migration writer·프로세스 강제 종료·디스크
+고갈은 실행하지 않았다. 문서로 endpoint/계층을 확인했지만 실제 키 권한·응답 변종·요청 한도는
+실환경 검증이 남는다. 자유 텍스트의 개인정보 자동 정제, TTL/재시도/이력 snapshot/실패 이력
+영속화는 없다. 백업은 최초 migration을 다른 writer 중지 상태로 실행하는 운영 정책을 따른다.
+상세 필드는 raw evidence로만 보존한다. 요건 추출·job matching은 없으며 **Phase 3B는 미시작**이다.

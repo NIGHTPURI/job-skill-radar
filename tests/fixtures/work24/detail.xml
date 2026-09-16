@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic data using the official wantedDtl/wantedInfo hierarchy. -->
+<wantedDtl>
+  <wantedAuthNo>TEST-001</wantedAuthNo>
+  <corpInfo>
+    <corpNm>Example Company</corpNm>
+    <corpAddr>Company address is not the work region</corpAddr>
+  </corpInfo>
+  <wantedInfo>
+    <jobsNm>Software developer</jobsNm>
+    <wantedTitle>Backend Engineer</wantedTitle>
+    <relJobsNm>Application developer</relJobsNm>
+    <jobCont>Build APIs with Java &amp; SQL.
+  Maintain services &lt;daily&gt;.
+
+Review changes with the team.</jobCont>
+    <receiptCloseDt>2026-10-31</receiptCloseDt>
+    <empTpNm>Permanent contract</empTpNm>
+    <collectPsncnt>2</collectPsncnt>
+    <salTpNm>Annual salary 40,000,000 KRW, negotiable</salTpNm>
+    <enterTpNm>경력무관</enterTpNm>
+    <eduNm>Bachelor degree or above</eduNm>
+    <forLang>English reading</forLang>
+    <major>Computer science</major>
+    <certificate>정보처리기사 (우대)</certificate>
+    <compAbl>Office software and spreadsheets</compAbl>
+    <pfCond>Relevant project experience</pfCond>
+    <etcPfCond>Spring Boot experience is a plus</etcPfCond>
+    <selMthd>Document review
+Interview</selMthd>
+    <rcptMthd>Online application</rcptMthd>
+    <submitDoc>Resume and portfolio</submitDoc>
+    <etcHopeCont><![CDATA[Bring examples; <no originals required>.]]></etcHopeCont>
+    <workRegion>Seoul, Mapo-gu</workRegion>
+    <workdayWorkhrCont>09:00-18:00, five days per week</workdayWorkhrCont>
+    <etcWelfare>Meals and training</etcWelfare>
+    <keywordList><srchKeywordNm>Java</srchKeywordNm><srchKeywordNm>API development</srchKeywordNm></keywordList>
+    <keywordList><srchKeywordNm>Java</srchKeywordNm><srchKeywordNm> </srchKeywordNm></keywordList>
+    <dtlRecrContUrl>https://example.com/details/1?a=1&amp;b=2</dtlRecrContUrl>
+    <jobsCd>133100</jobsCd>
+  </wantedInfo>
+  <empchargeInfo><contactTelno>Not collected</contactTelno></empchargeInfo>
+</wantedDtl>

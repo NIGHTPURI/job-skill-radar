@@ -1,5 +1,136 @@
 # 데이터 설계
 
+## Phase 3A 상세 원문과 schema v2 계약
+
+2026-09-16 기준. Phase 3A는 공식 Work24 상세 수집과 신뢰할 수 있는 저장까지 완료했다.
+아래 계약이 과거 schema v1 설명보다 우선한다. Phase 3B는 시작하지 않았다.
+
+### 공식 API 경계와 원문 의미
+
+[고용24 공식 상세 API 안내](https://m.work24.go.kr/cm/e/a/0110/selectOpenApiSvcInfo.do?fullApiSvcId=000000000000000000000000000000%5E000000000000000000000000000001%5E000000000000000000000000000003)의
+요청 URL·필수 인자·출력 계층을 확인했다. GET endpoint는
+`https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210D01.do`이며,
+`authKey`, `wantedAuthNo`, `callTp=D`, `returnType=XML`, `infoSvc=VALIDATION`을 URL encode한다.
+timeout은 30초, UTF-8(BOM 허용)로 해독한다. 자동 재시도는 없다.
+
+`parse_posting_detail`은 `wantedDtl/wantedAuthNo`와 단일 `wantedDtl/wantedInfo`를 읽어
+`DetailEvidence` dict를 반환한다. 이 함수는 I/O·시각 생성·요건 해석을 하지 않는다.
+`fetch_posting_detail`이 요청 identity와 응답 identity를 비교한 뒤 성공한 경우에만
+UTC ISO 8601 `fetched_at`을 붙여 `PostingDetail`을 반환한다. 이는 게시일·원문 수정일이
+아닌 **성공적으로 관측한 시각**이다. 두 계약은 런타임 dict를 유지하는 TypedDict다.
+
+문자열 앞뒤 padding만 제거한다. `job_content`의 내부 줄바꿈·들여쓰기·빈 줄은 보존하고,
+XML escape/CDATA는 텍스트로 읽는다. 선택 태그의 누락·빈 문자열·공백은 `None`이다.
+`keywords`는 `keywordList/srchKeywordNm`을 문서 순서대로 읽고 빈 값만 제외한다.
+중복과 대소문자를 유지하며 기술명 통합·쉼표 분할·정렬을 하지 않는다. 누락은 `[]`다.
+유효 identity와 빈 `wantedInfo`는 선택 정보가 없는 성공 응답이다. `wantedInfo` 자체가
+없거나 오류 응답인 경우와 구별하며 실패를 빈 상세로 바꾸지 않는다.
+
+### 선택 저장 필드
+
+`source`, `posting_id`, 아래 nullable TEXT 20개, `keywords`, `fetched_at`을 저장한다.
+
+| 저장 필드 | wantedInfo 태그 |
+|---|---|
+| job_content | jobCont |
+| employment_type | empTpNm |
+| raw_career_condition | enterTpNm |
+| education | eduNm |
+| foreign_language | forLang |
+| major | major |
+| certificate | certificate |
+| computer_skill | compAbl |
+| preferred_conditions | pfCond |
+| other_preferred_conditions | etcPfCond |
+| selection_method | selMthd |
+| receipt_method | rcptMthd |
+| submit_documents | submitDoc |
+| other_information | etcHopeCont |
+| work_region | workRegion |
+| work_hours | workdayWorkhrCont |
+| welfare | etcWelfare |
+| salary_condition | salTpNm |
+| closing_at | receiptCloseDt |
+| detail_url | dtlRecrContUrl |
+
+`empchargeInfo`의 채용부서·전화·팩스, 대표자·회사 재무·회사 주소 등 `corpInfo`, 첨부파일,
+지하철 세부 코드·중복 제목·각종 분류 코드는 상세 테이블에 저장하지 않는다. 원본 XML 전체,
+인증 URL·키·응답 본문을 실패 메시지에 저장하지 않는다. 선택한 자유 텍스트 안의 개인정보를
+자동 판별·삭제하는 기능은 없으며, 구조화된 연락처 필드를 수집하지 않는 범위다.
+
+### schema v2와 이전
+
+`PRAGMA user_version=2`. `job_postings`와 `posting_skills`의 기존 열·복합 identity·`created_at`은
+유지한다. 신규 `posting_details`는 `PRIMARY KEY (source, posting_id)`와
+`FOREIGN KEY (source, posting_id) REFERENCES job_postings(source, posting_id) ON DELETE CASCADE`를
+갖는다. surrogate ID는 없다. identity·keywords·fetched_at은 NOT NULL이며 keywords는 JSON 배열 TEXT다.
+각 연결에서 FK를 켠다. 다른 source의 같은 ID는 독립적이며 부모 삭제는 해당 상세·기술만 지운다.
+
+- fresh DB는 세 테이블과 v2를 한 transaction에서 생성한다.
+- v1→v2는 상세 테이블만 추가한다. 공고·기술·created_at을 재작성·재추출하지 않는다.
+  기존 데이터 변경을 거절하는 trigger를 설치한 테스트에서도 이전이 성공한다.
+- v0→v2는 기존 v0→v1 복합 키 변환 후 상세 테이블을 추가하는 단일 transaction이다.
+  모든 공고 필드·created_at을 보존한다. 기술은 **기존 Phase 1C 정책 그대로** 보존된 본문에서
+  재구성한다. 본문과 일치하는 기술은 유지하고 orphan·오래된 누적 기술을 정리하며 원본은 백업한다.
+  이는 v1 기술의 정확한 보존 정책과 다르다.
+- 마지막 DDL·FK 검증·version 기록 중 실패해도 원래 schema/data/version으로 rollback한다.
+  v2 재개방은 layout 확인만 수행하며 데이터 변경·추가 백업을 하지 않는다.
+
+파일 DB의 이전 작업 전에 SQLite backup API로 같은 디렉터리에
+`<DB>.pre-v2-from-v0-<고유값>.bak` 또는 `<DB>.pre-v2-from-v1-<고유값>.bak`을 만든다.
+`pre-v2`는 v2 이전 전, `from-vN`은 백업 안에 든 schema다. 백업 실패는 이전을 중단하고
+이번에 만든 불완전 백업만 제거한다. 기존 백업은 덮어쓰지 않으며 재시도마다 새 파일을 만든다.
+fresh/in-memory DB와 이미 v2인 DB에는 이전 백업을 만들지 않는다.
+복원은 모든 writer를 중지하고 백업을 별도 파일로 복사해 확인한다. 복사본을 현재 앱으로 열면
+다시 이전한다. 백업 시점과 write lock 획득 사이 동시 쓰기까지 일치시키는 설계는 아니므로
+최초 이전은 다른 writer를 중지한 상태로 수행한다.
+
+### 저장·갱신·부분 실패
+
+`save_posting_details`는 identity, UTC timestamp, 선택 문자열과 문자열 목록을 검증한 뒤
+SAVEPOINT로 전체 상세 배치를 upsert한다. 실패 시 해당 배치만 rollback하고 caller의 기존
+transaction은 보존한다. 두 path wrapper는 성공·실패 모두 연결을 닫는다.
+`load_posting_detail`의 `None`은 성공한 상세 저장 이력이 없다는 의미다.
+
+명시적인 상세 수집은 수집된 identity마다 매번 갱신한다. TTL·자동 재시도·이력 snapshot은 없다.
+성공한 최신 응답이 전체 상세를 교체하므로 이번 응답에 없는 선택 필드는 NULL이 된다.
+동일 내용이어도 새 성공 시각이면 fetched_at이 바뀐다. 실패한 갱신은 이전 상세와 fetched_at을
+그대로 유지한다. 수집 실패를 삭제·빈 상세 저장으로 표현하지 않는다.
+
+`collect_work24_with_details_to_db`의 순서는 목록 수집 → 기존 정제·복합 identity 중복 제거
+→ 목록 배치 저장·연결 종료 → 상세 HTTP → 성공 상세 저장·연결 종료의 반복이다.
+HTTP 중에는 SQLite 연결이나 write transaction을 보유하지 않는다.
+한 실행에서 같은 복합 identity는 첫 목록 표현을 유지하고 상세 요청은 최대 한 번이다.
+20건 중 상세 1건이 실패해도 목록 20건·성공 상세 19건은 저장하고 나머지 요청을 계속한다.
+기존 상세가 있으면 그대로 남는다. DB 오류·프로그래밍 오류까지 네트워크 부분 실패로 숨기지 않는다.
+
+`CollectionResult`는 중복 제거 후 목록 수 `collected`, 신규 identity 수 `new_postings`,
+성공 저장/갱신 수 `details_saved`, `detail_failures`를 반환한다. 각 `DetailFailure`는
+source/posting_id와 안전한 범주 `reason`만 갖는다. 실패 이력은 별도 DB 테이블에 영속화하지 않는다.
+
+### 오류·CLI·기존 분석 호환
+
+오류는 `transport_error`, `invalid_encoding`, `malformed_xml`, `unexpected_structure`,
+`missing_detail`, `missing_identity`, `identity_mismatch`, `api_error` 등으로 구분한다.
+명시적 error 요소나 errorCode/errorCd의 값은 방어적으로 인식하며 공식 오류 코드 체계를
+정의했다고 주장하지 않는다. 알 수 없는 응답 계층은 거절한다. 예외에는 URL·키·본문을 넣지 않고,
+통신/파싱 원래 예외의 traceback 연결을 억제한다. 임의 오류 문자열은 `request_error`로 제한한다.
+
+목록의 정상 빈 root/wantedRoot는 빈 목록으로 남고, HTML·오류·예상 밖 계층은 실패다.
+namespace 목록도 읽는다. KD-09는 이 경계에서 수정했다. 목록 실패 예외는 기존 원래 HTTP/ParseError
+대신 안전한 Work24Error로 바뀌지만 목록 수집 함수의 인자·list/int 반환·요청 횟수는 유지한다.
+
+`python -B scripts/collect_work24.py --keyword SQL`은 기존 목록 전용 경로다.
+`--with-details`를 추가해야 상세를 요청한다. 성공은 exit 0, 키 부재/목록 Work24 실패는 exit 1,
+상세 부분 실패는 성공 결과를 보존하고 성공·실패 건수와 실패 identity/범주를 출력한 뒤 exit 2다.
+exit 2는 전체 rollback을 뜻하지 않는다.
+
+상세 원문·우대조건·자격·keywords는 아직 기술 추출에 전달하지 않는다.
+기존 `description`은 목록 title+industry+career 요약 의미를 유지한다. 상세로 덮어쓰지 않는다.
+정규화된 `career`의 경력무관→무관 정책과 상세 `raw_career_condition`의 원문 경력무관을 함께 보존한다.
+상세-목록 우선순위는 추가하지 않았다. 기술 추출·역할 분류·추천은 기존 입력·동작 그대로다.
+필수/우대 기술 추출·자격 해석·LLM·공고 매칭·프로필·북마크·지원 관리는 구현하지 않았다.
+
 ## Phase 2D 경력 정규화 계약
 
 2026-09-16 기준. 아래 정책이 이전 단계의 경력무관 결함·경력 정제 설명을 대체한다.
@@ -30,7 +161,7 @@ application의 재정제 결과에 반영되지만, 이미 경력/신입으로 �
 
 ## Phase 1C 현재 영속 계약
 
-2026-09-16 기준. 아래 절이 최신 스키마이며 이후의 기존 MVP 표는 수집 필드 설명을 위한 과거 기록이다.
+Phase 1C 당시 기록. 공고·기술 저장 불변식은 유지하며 현재 스키마·이전 경로는 위 Phase 3A 계약을 따른다.
 
 ### 불변식과 스키마
 

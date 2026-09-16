@@ -5,11 +5,11 @@ from pathlib import Path
 
 from .analyzer import analyze_postings
 from .config import get_db_path
-from .models import AnalysisResult, JobPosting
+from .models import AnalysisResult, CollectionResult, JobPosting, PostingDetail
 from .normalizer import clean_postings
 from .sample_data import SAMPLE_POSTINGS
-from .storage import load_postings_from_db, save_postings_to_db
-from .work24_client import fetch_work24_postings
+from .storage import load_postings_from_db, save_posting_details_to_db, save_postings_to_db
+from .work24_client import Work24Error, fetch_posting_detail, fetch_work24_postings
 
 
 DEFAULT_KEYWORDS = [
@@ -23,6 +23,7 @@ DEFAULT_KEYWORDS = [
 # A collector accepts the keyword arguments of fetch_work24_postings.
 # A callable is sufficient here; no provider class or repository is needed.
 Collector = Callable[..., list[JobPosting]]
+DetailFetcher = Callable[..., PostingDetail]
 
 
 def analyze_sample() -> AnalysisResult:
@@ -103,3 +104,46 @@ def collect_and_analyze(
     collector: Collector | None = None,
 ) -> AnalysisResult:
     return analyze_postings(collect_postings(auth_key, keywords, pages, collector=collector))
+
+
+def collect_work24_with_details_to_db(
+    auth_key: str,
+    keywords: list[str] | None = None,
+    pages: int = 1,
+    display: int = 100,
+    *,
+    db_path: Path | None = None,
+    collector: Collector | None = None,
+    detail_fetcher: DetailFetcher | None = None,
+) -> CollectionResult:
+    """Explicitly refresh each collected Work24 identity once, without a TTL.
+
+    Commit the atomic list batch first. Fetch with no DB connection open; commit
+    each successful detail separately. Expected detail failures retain prior
+    evidence and do not prevent other requests. DB/programming errors propagate.
+    The list-only entry point keeps its int return and makes no detail requests.
+    """
+    postings = collect_postings(auth_key, keywords, pages, display, collector=collector)
+    path = get_db_path() if db_path is None else db_path
+    result: CollectionResult = {
+        "collected": len(postings), "new_postings": save_postings_to_db(path, postings),
+        "details_saved": 0, "detail_failures": [],
+    }
+    fetch = fetch_posting_detail if detail_fetcher is None else detail_fetcher
+    # collect_postings already deduplicated using (source, posting_id).
+    for posting in postings:
+        source, posting_id = posting["source"], posting["posting_id"]
+        try:
+            if source != "work24":
+                raise Work24Error("unsupported_source")
+            detail = fetch(auth_key=auth_key, wanted_auth_no=posting_id)
+            if (detail["source"], detail["posting_id"]) != (source, posting_id):
+                raise Work24Error("identity_mismatch")
+        except Work24Error as error:
+            result["detail_failures"].append({
+                "source": source, "posting_id": posting_id, "reason": error.kind,
+            })
+            continue
+        save_posting_details_to_db(path, [detail])
+        result["details_saved"] += 1
+    return result

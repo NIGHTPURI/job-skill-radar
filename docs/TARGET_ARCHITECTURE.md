@@ -1,8 +1,46 @@
 # Target Architecture — 개인용 Job Intelligence
 
-최신 상태: Phase 2C 추천 의미·근거·순위 계약을 적용했다(2026-09-16). Phase 2A의 59개 기술, Phase 2B 분류와 Phase 1C 저장 계약은 유지한다. 최신 추천 계약은 [데이터 설계](02_data_design.md#phase-2c-학습-추천-계약), 검증은 [테스트 기준선](TEST_BASELINE.md#phase-2c-검증-2026-09-16)을 따른다. 아래 이전 단계 기록과 장기 구조는 당시 현황·설계 제안이다. Phase 3는 시작하지 않았다.
+최신 상태: Phase 3A 공식 Work24 상세 수집·schema v2 저장을 완료했다(2026-09-16).
+Phase 2A 기술 추출·2B 분류·2C 추천·2D 경력 정규화는 유지한다. Phase 3B는 미시작이다.
+최신 계약은 [데이터 설계](02_data_design.md#phase-3a-상세-원문과-schema-v2-계약),
+검증은 [테스트 기준선](TEST_BASELINE.md#phase-3a-검증-2026-09-16)을 따른다.
+아래 이전 단계 기록과 장기 구조는 당시 현황·설계 제안이다.
 
 Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다. Phase 1C 저장 무결성·마이그레이션 계약은 계속 유지한다.
+
+## Phase 3A 실제 구현 경계
+
+새 서비스 계층 없이 기존 모듈을 확장했다. models는 `DetailEvidence`, `PostingDetail`,
+`DetailFailure`, `CollectionResult` dict 계약을 제공한다. Work24 client가 공식 상세 요청,
+XML 구조·응답 identity 확인, 안전한 오류 범주와 성공 UTC 관측 시각을 소유한다.
+원문 20개 필드와 순서·중복을 보존하는 keywords만 선택하며 연락처·전체 응답 XML은 저장하지 않는다.
+
+```text
+CLI --with-details
+  → collect_work24_with_details_to_db
+    → collect_postings: list HTTP → normalize/deduplicate (source, posting_id)
+    → save_postings_to_db: atomic list batch → close connection
+    → each identity: detail HTTP (no DB connection)
+      → success: save_posting_details_to_db → close connection
+      → Work24Error: append safe DetailFailure; preserve previous detail; continue
+  → counts and failures; exit 0 / partial detail failure 2
+```
+
+목록 실패는 기존처럼 목록 저장 전에 중단되며 CLI는 안전한 범주와 exit 1을 반환한다.
+기존 `collect_work24_to_db`는 int 반환과 목록 전용 트래픽을 유지한다. 상세 수집은 opt-in이며
+실행마다 수집된 identity를 한 번만 갱신한다. DB/프로그래밍 오류는 그대로 전파한다.
+
+storage는 상세 conn/path API와 SAVEPOINT 배치를 제공한다. 성공 응답만 upsert하고,
+실패한 refresh는 이전 상세·fetched_at을 보존한다. migrations는 fresh→v2, v0→v1→v2,
+추가 방식 v1→v2를 단일 transaction으로 처리한다. 복합 FK/CASCADE와 caller transaction을 유지한다.
+파일 백업은 이전 전에 `.pre-v2-from-vN-<고유값>.bak`으로 만들고 실패하면 이전을 중단한다.
+v2 재개방은 멱등적이며 추가 백업을 만들지 않는다. v0의 기존 기술 재구성 정책과 v1의 정확한
+행 보존은 구별한다. 복원·동시 writer 제한은 데이터 설계에 명시했다.
+
+상세 evidence는 기존 analyzer/extractor/classifier/recommender 경로에 연결하지 않는다.
+목록 description과 정규화 career는 그대로이며 raw_career_condition은 별도 원문이다.
+요건 해석·LLM·매칭·사용자 기능·Phase 3B는 구현하지 않았다.
+아래 장기 설계의 snapshot·수집 이력·TTL·백오프·새 UI는 현재 기능이 아니다.
 
 ## Phase 2C 변경 전 추천 감사 (2026-09-16)
 

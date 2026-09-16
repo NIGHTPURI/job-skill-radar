@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import cast
 
-from .models import JobPosting, POSTING_FIELDS
+from .models import DETAIL_FIELDS, DETAIL_TEXT_FIELDS, JobPosting, POSTING_FIELDS, PostingDetail
 from .migrations import enable_foreign_keys, ensure_schema, validate_identity
 from .skill_extractor import extract_skills
 
@@ -99,3 +100,72 @@ def save_postings_to_db(db_path: Path, postings: list[dict]) -> int:
     """Save one atomic batch and always close the connection."""
     with closing(connect(db_path)) as conn:
         return save_postings(conn, postings)
+
+
+def save_posting_details(conn: sqlite3.Connection, details: list[PostingDetail]) -> None:
+    """Atomically replace successful evidence; never accept a failure placeholder.
+
+    Omitted optional text becomes NULL. Successful identical refreshes update only
+    fetched_at when a new timestamp is supplied. Preserve the caller transaction.
+    """
+    rows = []
+    for detail in details:
+        validate_identity(detail.get("source"), detail.get("posting_id"))
+        fetched_at = detail.get("fetched_at")
+        if not isinstance(fetched_at, str) or not fetched_at.strip():
+            raise ValueError("fetched_at must be a UTC ISO 8601 timestamp")
+        try:
+            offset = datetime.fromisoformat(fetched_at).utcoffset()
+        except ValueError:
+            raise ValueError("fetched_at must be a UTC ISO 8601 timestamp") from None
+        if offset != timedelta(0):
+            raise ValueError("fetched_at must be a UTC ISO 8601 timestamp")
+        for name in DETAIL_TEXT_FIELDS:
+            if detail.get(name) is not None and not isinstance(detail[name], str):
+                raise ValueError(f"{name} must be text or None")
+        keywords = detail.get("keywords")
+        if not isinstance(keywords, list) or any(not isinstance(word, str) for word in keywords):
+            raise ValueError("keywords must be a list of strings")
+        values = {**detail, "keywords": json.dumps(keywords, ensure_ascii=False)}
+        rows.append(tuple(values.get(name) for name in DETAIL_FIELDS))
+    ensure_schema(conn)
+    columns = ", ".join(DETAIL_FIELDS)
+    placeholders = ", ".join("?" for _ in DETAIL_FIELDS)
+    updates = ", ".join(f"{name}=excluded.{name}" for name in DETAIL_FIELDS
+                        if name not in ("source", "posting_id"))
+    conn.execute("SAVEPOINT save_details_batch")
+    try:
+        conn.executemany(
+            f"INSERT INTO posting_details ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT(source, posting_id) DO UPDATE SET {updates}", rows,
+        )
+        conn.execute("RELEASE SAVEPOINT save_details_batch")
+    except BaseException:
+        conn.execute("ROLLBACK TO SAVEPOINT save_details_batch")
+        conn.execute("RELEASE SAVEPOINT save_details_batch")
+        raise
+
+
+def load_posting_detail(conn: sqlite3.Connection, source: str, posting_id: str) -> PostingDetail | None:
+    """None means never successfully stored; nullable fields mean source absence."""
+    validate_identity(source, posting_id)
+    ensure_schema(conn)
+    row = conn.execute(
+        f"SELECT {', '.join(DETAIL_FIELDS)} FROM posting_details WHERE source=? AND posting_id=?",
+        (source, posting_id),
+    ).fetchone()
+    if row is None:
+        return None
+    detail = dict(zip(DETAIL_FIELDS, row))
+    detail["keywords"] = json.loads(detail["keywords"])
+    return cast(PostingDetail, detail)
+
+
+def save_posting_details_to_db(db_path: Path, details: list[PostingDetail]) -> None:
+    with closing(connect(db_path)) as conn:
+        save_posting_details(conn, details)
+
+
+def load_posting_detail_from_db(db_path: Path, source: str, posting_id: str) -> PostingDetail | None:
+    with closing(connect(db_path)) as conn:
+        return load_posting_detail(conn, source, posting_id)

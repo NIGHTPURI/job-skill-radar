@@ -56,3 +56,59 @@ class SkillRecommendation(TypedDict):
     is_foundation: bool
     evidence_source: Literal["role_market", "foundation_only"]
     reason: str
+
+
+class DetailEvidence(TypedDict):
+    """Source text, not interpreted requirements or normalized list metadata.
+
+    Missing/blank optional XML values are None; keywords preserve source order.
+    Neither this evidence nor its keywords feed skill extraction in Phase 3A.
+    """
+
+    source: str
+    posting_id: str
+    job_content: str | None
+    employment_type: str | None
+    raw_career_condition: str | None
+    education: str | None
+    foreign_language: str | None
+    major: str | None
+    certificate: str | None
+    computer_skill: str | None
+    preferred_conditions: str | None
+    other_preferred_conditions: str | None
+    selection_method: str | None
+    receipt_method: str | None
+    submit_documents: str | None
+    other_information: str | None
+    work_region: str | None
+    work_hours: str | None
+    welfare: str | None
+    salary_condition: str | None
+    closing_at: str | None
+    detail_url: str | None
+    keywords: list[str]
+
+
+class PostingDetail(DetailEvidence):
+    fetched_at: str  # UTC ISO 8601; added only after a successful fetch.
+
+
+DETAIL_TEXT_FIELDS = tuple(
+    name for name in DetailEvidence.__annotations__
+    if name not in ("source", "posting_id", "keywords")
+)
+DETAIL_FIELDS = ("source", "posting_id", *DETAIL_TEXT_FIELDS, "keywords", "fetched_at")
+
+
+class DetailFailure(TypedDict):
+    source: str
+    posting_id: str
+    reason: str  # Safe category, never a request URL, key or response body.
+
+
+class CollectionResult(TypedDict):
+    collected: int
+    new_postings: int
+    details_saved: int
+    detail_failures: list[DetailFailure]

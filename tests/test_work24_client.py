@@ -1,15 +1,15 @@
 import io
 import sys
+import traceback
 import unittest
 import urllib.error
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from jobskillradar.work24_client import _parse_list_response, fetch_work24_postings
+from jobskillradar.work24_client import Work24Error, _parse_list_response, fetch_work24_postings
 
 FIXTURE = Path(__file__).parent / "fixtures" / "work24" / "list.xml"
 
@@ -61,16 +61,30 @@ class Work24ParserTest(unittest.TestCase):
     def test_empty_result(self):
         self.assertEqual(_parse_list_response("<root/>"), [])
 
-    def test_current_kd09_error_xml_is_indistinguishable_from_empty_result(self):
-        """KD-09 / Phase 4B: synthetic error envelope silently becomes zero postings."""
-        self.assertEqual(_parse_list_response("<error><message>invalid key</message></error>"), [])
+    def test_kd09_error_xml_is_distinct_from_empty_result(self):
+        """Synthetic defensive error recognition; no official error schema claimed."""
+        with self.assertRaises(Work24Error) as raised:
+            _parse_list_response("<error><message>invalid key</message></error>")
+        self.assertEqual(raised.exception.kind, "api_error")
 
-    def test_malformed_xml_raises_parse_error(self):
-        with self.assertRaises(ET.ParseError):
+    def test_malformed_xml_raises_safe_error(self):
+        with self.assertRaises(Work24Error) as raised:
             _parse_list_response("<root>")
+        self.assertEqual(raised.exception.kind, "malformed_xml")
 
-    def test_current_namespaced_wanted_nodes_are_not_matched(self):
-        self.assertEqual(_parse_list_response('<root xmlns="urn:test"><wanted/></root>'), [])
+    def test_namespaced_list_preserves_postings(self):
+        xml = FIXTURE.read_text(encoding="utf-8")
+        self.assertEqual(_parse_list_response(xml.replace('<wantedRoot>', '<wantedRoot xmlns="urn:test">')),
+                         _parse_list_response(xml))
+
+    def test_unexpected_envelopes_never_become_empty_results(self):
+        for xml in ('<html/>', '<root>Unavailable</root>', '<wantedRoot><message>denied</message></wantedRoot>',
+                    '<root><wrapper><wanted/></wrapper></root>',
+                    '<wantedRoot><total><message>denied</message></total></wantedRoot>'):
+            with self.subTest(xml=xml), self.assertRaises(Work24Error) as raised:
+                _parse_list_response(xml)
+            self.assertEqual(raised.exception.kind, "unexpected_structure")
+        self.assertEqual(_parse_list_response('<wantedRoot><total>0</total><startPage>1</startPage><display>10</display></wantedRoot>'), [])
 
 
 class Work24RequestTest(unittest.TestCase):
@@ -126,14 +140,29 @@ class Work24RequestTest(unittest.TestCase):
         self.assertEqual([p["posting_id"] for p in postings], ["TEST-001", "TEST-002"] * 2)
         self.assertEqual(postings[0]["company"], "테스트 회사")
 
-    def test_timeout_and_http_error_propagate_without_retry(self):
-        for error in (TimeoutError("timed out"), urllib.error.HTTPError("https://example.com", 503, "unavailable", {}, None)):
+    def test_transport_errors_are_safe_without_retry(self):
+        auth_key = "secret-key"
+        for error in (TimeoutError("secret-key"), urllib.error.HTTPError("https://example.com?authKey=secret-key", 503, "secret-key", {}, None)):
             with self.subTest(error=type(error).__name__):
                 self.urlopen.reset_mock()
                 self.urlopen.side_effect = error
-                with self.assertRaises(type(error)):
-                    fetch_work24_postings("test-key", "SQL", pages=3)
+                try:
+                    fetch_work24_postings(auth_key, "SQL", pages=3)
+                except Work24Error as failure:
+                    self.assertEqual(failure.kind, "transport_error")
+                    self.assertNotIn("secret-key", "".join(traceback.format_exception(failure)))
+                else:
+                    self.fail("Transport failure was accepted")
                 self.assertEqual(self.urlopen.call_count, 1)
+
+    def test_invalid_utf8_and_api_body_are_safe_failures(self):
+        for body, kind in ((b'\xff', 'invalid_encoding'),
+                           (b'<error><message>secret-key</message></error>', 'api_error')):
+            self.urlopen.side_effect = lambda *a, **kw: io.BytesIO(body)
+            with self.assertRaises(Work24Error) as raised:
+                fetch_work24_postings('secret-key', 'SQL')
+            self.assertEqual(raised.exception.kind, kind)
+            self.assertNotIn('secret-key', str(raised.exception))
 
 
 if __name__ == "__main__":
