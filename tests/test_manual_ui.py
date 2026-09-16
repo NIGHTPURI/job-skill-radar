@@ -24,7 +24,8 @@ class ManualUiTest(unittest.TestCase):
             self.addCleanup(context.stop)
 
     def app(self):
-        return AppTest.from_file(str(ROOT / 'app.py'), default_timeout=15).run()
+        app = AppTest.from_file(str(ROOT / 'app.py'), default_timeout=15).run()
+        return app.sidebar.radio(key='navigation').set_value('공고 목록').run()
 
     def test_create_restart_edit_and_alternative_display(self):
         app = self.app()

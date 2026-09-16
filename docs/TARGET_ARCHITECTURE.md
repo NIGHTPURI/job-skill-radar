@@ -1,5 +1,28 @@
 # Target Architecture — 개인용 Job Intelligence
 
+## Phase 7D 최신 애플리케이션 구조 (2026-09-17)
+
+```text
+Streamlit discovery_ui / scripts.discover_jobs (intentional one-shot action)
+  -> discovery_pipeline.discover_work24_jobs
+     -> saved profile -> pure discovery plan
+     -> closed DB readers -> sequential bounded Work24 list/detail HTTP
+     -> discovery_storage atomic postings/details/run/membership write
+  -> load_discovery_shortlist (offline, current profile + current raw detail)
+     -> existing extractor v2 -> existing matcher -> pure shortlist
+  -> existing review_ui posting/raw/requirements/comparison view
+```
+
+키워드 입력이 필요 없는 기본 화면, 안전한 오류/키 없음 안내, persisted 최신/과거 실행 조회,
+NEW/bucket 필터와 20건 페이지, 기존 상세 화면 이동을 추가했다. SQL/계획/분류 규칙은 UI 밖에 있다.
+API 호출은 버튼 한 곳에서만 수행하고 조회에 캐시/자동 수집을 섞지 않는다. 같은 application API를
+CLI에서도 재사용하며 scheduler 자체는 만들지 않았다. 스키마4·추출기2·시장 의미는 유지한다.
+실사용/backend/data quality/API 관점으로 네 번 검토했다. 두 번째에 유효한 컬럼 재배치
+스키마에서 위치 기반 SQL이 실패함을 재현해 명시적 컬럼 SQL로 수정했다. 이후 두 번의 전체
+검토에서 추가 중대 결함이 발견되지 않았다. 목록 URL 결측 시 기존 상세 URL 연결도 실제 UI 테스트로 확인했다.
+추가 provider/ORM/LLM/점수/지원 추적은 없다. README가 현재 일상 실행 절차의 기준이다.
+
+
 ## Phase 7C 현재 경계 (2026-09-17)
 
 실행 이력→현재 프로필 한 번 읽기→소속 공고별 기존 raw 추출/순수 matcher→순수 shortlist다.

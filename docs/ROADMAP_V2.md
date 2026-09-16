@@ -1,5 +1,18 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
+## Phase 7D 자동 공고 발견 MVP 완료
+
+7A 5e36f27 → 7B c061056 → 7C 0d8c7e9 각각 push/clean 후 7D를 구현했다.
+기본 Streamlit 자동 검색·실행 복원·설명 목록·기존 상세 이동과 일회성 CLI를 연결했다.
+인수 테스트는 임시 DB/프로필로 중복·상세 실패·OR·필수 gap을 포함한 3회 검색을 수행한다.
+전체456개, discovery61개, API 없는 UI11개와 bounded headless smoke를 통과했다.
+실 API는 키/프로필 미설정으로 생략했다. 사용자 actual DB는 테스트에 쓰지 않았다.
+실사용/저장/데이터 품질/API 관점으로 네 번 review했다. 컬럼 순서 의존 SQL을 재현·수정한
+뒤 마지막 두 번의 전체 review에서 추가 중대 결함이 없었다.
+다음 가치가 큰 작업은 사용자의 실제 역할 검색 결과에서 검색어 coverage와 원문/분류 품질을
+수동 평가하는 것이다. 지원 추적·numeric scoring·trend·타 사이트 scraping은 시작하지 않는다.
+
+
 ## Phase 7C 완료
 
 7B c061056 push/clean 후 순수 검토 분류와 현재 프로필 재계산 application API를 추가했다.

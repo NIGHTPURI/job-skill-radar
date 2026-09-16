@@ -105,6 +105,24 @@ class DiscoveryPersistenceTest(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 discovery_storage._validate_run(bad)
 
+    def test_valid_reordered_columns_do_not_change_run_serialization(self):
+        with closing(storage.connect(self.path)) as conn:
+            conn.execute('DROP TABLE discovery_run_postings')
+            conn.execute('DROP TABLE discovery_runs')
+            conn.execute("""CREATE TABLE discovery_runs (
+                report TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('completed','partial','failed')),
+                completed_at TEXT NOT NULL, started_at TEXT NOT NULL, profile_revision INTEGER NOT NULL,
+                source TEXT NOT NULL CHECK(source='work24'), run_id TEXT NOT NULL PRIMARY KEY)""")
+            conn.execute("""CREATE TABLE discovery_run_postings (
+                queries TEXT NOT NULL, was_new INTEGER NOT NULL CHECK(was_new IN (0,1)),
+                posting_id TEXT NOT NULL, source TEXT NOT NULL CHECK(source='work24'), run_id TEXT NOT NULL,
+                PRIMARY KEY(run_id,source,posting_id),
+                FOREIGN KEY(run_id) REFERENCES discovery_runs(run_id) ON DELETE CASCADE,
+                FOREIGN KEY(source,posting_id) REFERENCES job_postings(source,posting_id) ON DELETE RESTRICT)""")
+            migrations.ensure_schema(conn)
+        result = self.discover(1)
+        self.assertEqual(discovery_storage.load_discovery_run(self.path), result)
+
     def test_history_limit_and_missing_run(self):
         self.assertIsNone(discovery_storage.load_discovery_run(self.path))
         self.assertIsNone(discovery_storage.load_discovery_run(self.path, 'absent'))

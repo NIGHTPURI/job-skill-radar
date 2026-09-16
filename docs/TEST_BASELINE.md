@@ -1,5 +1,33 @@
 # Phase 1A — Regression Test Baseline
 
+## Phase 7D 최종 검증 (2026-09-17)
+
+시작64d7511/395개 → 7A412 → 7B424 → 7C437 → **456개 전부 통과**.
+일반 실패/오류/expected failure/skip0.
+자체 검토에서 유효한 컬럼 재배치 스키마의 INSERT 실패를 재현했고, 명시적 컬럼 이름으로
+쓰기/읽기를 수정해 회귀 테스트로 보장한다. discovery 관련61개:
+계획/실행17, 저장/이전13, shortlist13, 반복검색인수1, CLI6, UI11.
+7D19개를 추가했고 기존 UI 테스트는 새 기본 화면에 맞게 공고 목록으로 명시 이동하도록만
+수정했다. 기존 요건 평가 corpus/추출기/시장·역할·추천 규칙은 바꾸지 않았다.
+
+3회 인수 검증: 기존 성공 원문과 manual 공고가 있는 DB에서 새로운4개+기존1개 발견,
+중복 소속 제거, 상세1개 실패, 필수 OR/독립 gap/미검출/정보 부족 분류를 확인했다.
+두 번째 신규0·명시 refresh 실패의 old raw 보존, 세 번째 추가1개·신규1·성공 상세 재사용을 확인했다.
+별도10→10→12 실행의 신규10→0→2도 유지한다. original URL fallback·예산20/미수집1·20건 UI
+페이지·키 없이 이력 조회·프로필 변경 재분류·rerun 요청 수 불변을 AppTest로 검증했다.
+
+CLI6개는 실제 main을 temporary DB/fake collector/detail fetcher로 실행해 JSON/기본 출력,
+0/2/1 exit, 키/프로필/인수 오류, explicit refresh와 예산을 검증한다. 실제 Work24 HTTP는 차단한다.
+전체 unittest, requirement 평가, sample CLI, 모든 관련 집중 suite, compileall src/scripts,
+diff check를 수행했다. headless Streamlit은 임시 DB·localhost로 health 확인 후 자동 종료했다.
+AppTest가 실제 app script/DB initialization/이전/전체 workflow를 별도로 검증한다.
+
+요건 평가60/60사례·144/144분류·13/13그룹, required/preferred FP0 유지. fixture 전용 지표이며
+실공고/시장 정확도가 아니다. real API smoke는 API 키와 저장 프로필이 없어 생략했다.
+실제 사용자 DB는 이전하지 않았다. 추가 검증 제한: 실제 Work24 검색어 coverage, 복잡한 원문
+논리·부정·미지원 기술, 상세 주소/복수 지역 해석, 일괄 만료 공고 판정은 미검증/미지원이다.
+
+
 ## Phase 7C 검증 (2026-09-17)
 
 전체437개(기존424+shortlist13) 통과. discovery 집중42개 통과.

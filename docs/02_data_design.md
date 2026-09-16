@@ -1,5 +1,33 @@
 # 데이터 설계
 
+## Phase 7D 자동 발견 MVP 현재 계약 (2026-09-17)
+
+사용자 정의 Phase 7A~7D가 최신 범위다. 아래 과거 단계의 ‘현재/예정’은 당시 기록이다.
+schema v4, requirement extractor v2, 파생 요건/비교/shortlist 비영속을 유지한다.
+Streamlit 기본 화면은 새 공고 찾기다. 현재 역할/자동 검색어→명시적 버튼→진행 상태→원자적
+실행 저장→요약/네 bucket→기존 공고 상세/원문/비교 화면 순이다. 검색 호출은 버튼 분기 안에만
+있고 rerun/필터/갱신 옵션 변경/재시작/과거 실행 열기는 HTTP를 하지 않는다.
+최근20회 실행과 NEW 필터·bucket 필터·20건 페이지를 제공한다. 원문 URL은 목록 우선, 없으면
+상세 detail_url을 사용한다. http/https 링크만 노출한다. 원문/개인 연락처를 카드에 복제하지 않는다.
+실행 당시 역할·revision·검색어·완료 시각/상태·신규/기존·상세 성공/실패/재사용/미수집을 표시한다.
+현재 비교 revision은 별도로 보이며 검색 당시 revision과 다를 수 있다. NEW는 실행에 고정된다.
+
+프로필/목표 직무 없음은 설정 안내, 키 없음은 검색 비활성 및 수동/저장 이력 검토 유지다.
+partial은 성공 자료를 표시하고 실패 category를 노출한다. failed에서도 이전 실행을 선택할 수 있다.
+예상 밖 실행/DB 오류는 안전한 안내만 출력하며 인증키·URL·응답 본문·원래 exception을 표시하지 않는다.
+
+`python -B scripts/discover_jobs.py`는 저장 프로필과 키를 읽어 같은 API를 한 번 호출한다.
+--pages 1..2, --display 1..50, --max-details 0..50, --refresh-existing-details,
+--db-path와 --json을 지원한다. 0=completed, 2=partial(성공 데이터 저장), 1=failed/잘못된 설정/
+실행 불가다. JSON은 실행 계약만 출력하고 raw 상세는 출력하지 않는다. 스케줄러 연결은 가능하나
+설치·상주 프로세스·폴링은 없다. CLI/앱 동시 실행은 피하고 첫 이전 전 writer를 종료한다.
+
+자동 source는 Work24만이다. 다른 사이트는 수동 복사/등록이며 스크래핑하지 않는다.
+기존 시장 analyzer/recommender는 그대로이고 manual 제외도 유지한다. 수집 표본은 역할 검색에
+편향될 수 있으며 전체 시장 통계가 아니다. 요구/선호 추출의 실공고 정확도도 아직 측정하지 않았다.
+이번 real smoke는 로컬 키/저장 프로필이 없어 생략했다. 실제 사용자 DB 이전은 실행하지 않았다.
+
+
 ## Phase 7C 설명 가능한 검토 목록 (2026-09-17)
 
 `build_discovery_shortlist`는 membership/posting/현재 JobComparison을 받아 bucket/reasons를

@@ -112,9 +112,9 @@ def _insert_run(conn, result: dict) -> None:
     import json
     _validate_run(result)
     report = {key: value for key, value in result.items() if key not in (*RUN_COLUMNS, 'postings')}
-    conn.execute('INSERT INTO discovery_runs VALUES (?, ?, ?, ?, ?, ?, ?)',
+    conn.execute('INSERT INTO discovery_runs (run_id, source, profile_revision, started_at, completed_at, status, report) VALUES (?, ?, ?, ?, ?, ?, ?)',
                  tuple(result[key] for key in RUN_COLUMNS) + (json.dumps(report, ensure_ascii=False, allow_nan=False),))
-    conn.executemany('INSERT INTO discovery_run_postings VALUES (?, ?, ?, ?, ?)',
+    conn.executemany('INSERT INTO discovery_run_postings (run_id, source, posting_id, was_new, queries) VALUES (?, ?, ?, ?, ?)',
                      [(result['run_id'], m['source'], m['posting_id'], int(m['was_new']),
                        json.dumps(m['queries'], ensure_ascii=False)) for m in result['postings']])
 
@@ -126,8 +126,8 @@ def load_discovery_run(path: Path, run_id: str | None = None) -> dict | None:
         storage.ensure_schema(conn)
         with conn:
             conn.execute('BEGIN')
-            row = conn.execute('SELECT * FROM discovery_runs WHERE run_id=?', (run_id,)).fetchone() if run_id else conn.execute(
-                'SELECT * FROM discovery_runs ORDER BY completed_at DESC, run_id DESC LIMIT 1').fetchone()
+            row = conn.execute('SELECT run_id, source, profile_revision, started_at, completed_at, status, report FROM discovery_runs WHERE run_id=?', (run_id,)).fetchone() if run_id else conn.execute(
+                'SELECT run_id, source, profile_revision, started_at, completed_at, status, report FROM discovery_runs ORDER BY completed_at DESC, run_id DESC LIMIT 1').fetchone()
             if row is None:
                 return None
             result = {**dict(zip(RUN_COLUMNS, row[:6])), **json.loads(row[6])}

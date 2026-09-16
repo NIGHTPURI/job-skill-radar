@@ -25,7 +25,8 @@ class ComparisonUiTest(unittest.TestCase):
             self.addCleanup(context.stop)
 
     def app(self):
-        return AppTest.from_file(str(ROOT / 'app.py'), default_timeout=15).run()
+        app = AppTest.from_file(str(ROOT / 'app.py'), default_timeout=15).run()
+        return app.sidebar.radio(key='navigation').set_value('공고 목록').run()
 
     def test_full_morning_manual_profile_comparison_restart_and_edit_journey(self):
         app = self.app()

@@ -107,7 +107,7 @@ def render_posting_browser() -> None:
     posting, detail = review["posting"], review["detail"]
     st.subheader(posting["title"] or "제목 미상")
     st.text(f"{posting['company']} · 출처: {posting['source']} · ID: {posting['posting_id']}")
-    url = posting.get("url") or ""
+    url = posting.get("url") or (detail or {}).get("detail_url") or ""
     if url.startswith(("http://", "https://")):
         st.link_button("원문 열기", url)
     with st.expander("저장한 원문", expanded=True):

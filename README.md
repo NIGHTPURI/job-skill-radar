@@ -1,87 +1,98 @@
 # Job Skill Radar
 
-채용공고 데이터를 수집하고 분석해서 데이터 직무별 요구 역량을 보여주는 포트폴리오 프로젝트입니다.
+저장한 목표 직무로 **고용24 공고를 자동 발견하고, 검토할 이유와 원문 근거를 보여주는 개인용 도구**입니다.
+보유 기술만으로 검색 범위를 좁히지 않으며 적합도 점수·합격 확률을 만들지 않습니다.
 
-## 목표
+## 시작하기
 
-- 고용24/워크넷 채용공고 데이터를 수집한다.
-- 데이터 직무 공고에서 기술스택을 추출한다.
-- 직무, 경력, 지역별 채용 트렌드를 분석한다.
-- 사용자의 보유 기술과 목표 직무를 바탕으로 학습 우선순위를 추천한다.
-- Streamlit 대시보드로 배포한다.
-
-## MVP 기능
-
-- 샘플 데이터 기반 분석 데모
-- 고용24 Open API 수집기
-- 기술스택 추출
-- 직무별 인기 기술 분석
-- 사용자 보유 기술 기반 추천
-- SQLite 저장
-- Streamlit 대시보드
-
-## 빠른 실행
-
-현재 기본 실행 검증은 외부 패키지 없이 가능합니다.
-
-```powershell
-python scripts/run_demo.py
+```bash
+cd ~/Dev/job-skill-radar
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m streamlit run app.py --server.address 127.0.0.1
 ```
 
-샘플 데이터를 DB에 저장하면 대시보드에서 실제 저장소 기반 흐름을 확인할 수 있습니다.
+이미 가상환경이 있으면 마지막 명령만 실행하세요. Windows에서는 `.venv\Scripts\python.exe`를
+사용하거나 `scripts/start_dashboard.ps1`로 실행할 수 있습니다.
+[다른 PC 설정](docs/04_other_pc_setup.md)도 참고하세요.
 
-```powershell
-python scripts/seed_sample.py
+1. **내 프로필**에서 보유 기술과 목표 직무를 저장합니다. 지역 선호와 필수 조건은 다릅니다.
+2. 고용24에서 발급받은 키를 프로젝트 `.env`의 `WORK24_AUTH_KEY`에 설정하고 앱을 재시작합니다.
+   `.env.example` 형식을 참고하고 실제 키를 Git·공유 화면·메시지에 넣지 마세요.
+3. **새 공고 찾기**에서 자동 검색어를 확인하고 같은 이름의 버튼을 누릅니다. 키워드 입력은 필요 없습니다.
+4. 새로 발견한 공고와 검토 분류를 확인하고 **공고 열기**로 원문·요건·AND/OR 조건을 봅니다.
+5. **내 프로필과 비교**를 선택해 필수·우대·업무 기술과 프로필 등록 여부, 정확한 근거를 확인합니다.
+
+다음 날에는 앱을 열고 저장된 최근 실행을 먼저 확인한 뒤 버튼으로 한 번 검색하세요.
+필터 변경·앱 재실행만으로는 외부 요청을 보내지 않습니다. 최근 20회 실행을 선택해 볼 수 있습니다.
+‘새 공고’는 **해당 검색에서 이 로컬 DB에 처음 발견한 공고**이지 오늘 고용주가 게시했다는 뜻은 아닙니다.
+과거 실행을 열어도 검토 분류는 현재 프로필과 현재 저장 원문으로 다시 계산합니다.
+
+API 키가 없어도 **공고 직접 등록 → 공고 목록 → 원문/요건/프로필 비교**는 사용할 수 있습니다.
+Wanted·Jumpit·사람인·LinkedIn·회사 채용 페이지 등은 사용자가 직접 복사해 등록하는 방식이며
+자동 접속·스크래핑하지 않습니다. 자동 검색 source는 Work24뿐입니다.
+
+## 검토 분류의 의미
+
+| 분류 | 의미 |
+|---|---|
+| 먼저 검토 | 목표 직무이며 현재 분류 가능한 근거에서 필수 프로필 미등록이 검출되지 않음. 자격 충족 판정은 아님 |
+| 필수 요건 확인 필요 | 독립 필수 기술 또는 필수 AND/OR 조건을 현재 프로필 등록만으로 확인하지 못함 |
+| 정보 부족 | 상세/자격 근거 부족, 역할 미분류, 미해석·충돌 근거, 판단할 수 없는 필수 지역 조건 |
+| 현재 목표/조건 밖 | 명시적으로 다른 직무이거나 정확한 근거로 확인된 필수 조건 불일치. 공고를 숨기지는 않음 |
+
+우대 미등록은 필수 부족이 아닙니다. OR는 하나의 선택 조건이며, 하나를 등록하면 그 그룹은 충족됩니다.
+‘프로필에 미등록’은 실제로 그 기술을 모른다는 뜻이 아닙니다. 원문과 마감 여부를 직접 확인하세요.
+지역 비교는 원문 전체가 정확한 단일 시·도 label일 때만 판단합니다. 상세 주소·복수 지역 등은 unknown입니다.
+
+## 요청 예산과 갱신
+
+- 기존 8개 직무마다 고정 검색어 2개, 전체 최대 16개입니다. 보유 기술은 검색 필터가 아닙니다.
+- 기본 질의당 1페이지·20건, 상세 요청 최대20회입니다. 백엔드만 선택하면 최대 목록2회+상세20회입니다.
+- 상세는 새 공고, 상세 없는 기존 공고 순으로 가져오고 기존 성공 상세는 재사용합니다.
+- **상세 갱신 옵션**에서 명시적으로 요청한 경우만 기존 성공 상세를 다시 가져옵니다. 같은 예산을 적용합니다.
+- 실패한 상세는 기존 성공 원문을 지우지 않습니다. 예산 미수집과 요청 실패는 따로 표시합니다.
+- 일부 질의/상세 실패는 부분 완료로 저장합니다. 모든 질의 실패도 실행 기록을 남깁니다.
+- 검색어 recall, 실공고 추출 정확도, 공고의 현재 유효성은 보장하지 않습니다. 재시도·상시 감시는 없습니다.
+
+## 일회성 CLI / 예약 실행 준비
+
+프로필을 먼저 앱에서 저장하고 키를 설정한 뒤 실행합니다.
+
+```bash
+.venv/bin/python -B scripts/discover_jobs.py
+.venv/bin/python -B scripts/discover_jobs.py --json
+.venv/bin/python -B scripts/discover_jobs.py --pages 2 --display 20 --max-details 30
+.venv/bin/python -B scripts/discover_jobs.py --refresh-existing-details --max-details 10
 ```
 
-대시보드를 실행하려면 패키지를 설치합니다.
+허용 범위: pages 1~2, display 1~50, max-details 0~50. 최대로 설정해도 목록32회+상세50회 이내입니다.
+앱 자체 제한이며 공식 API rate limit을 주장하지 않습니다. `--db-path /absolute/path/radar.sqlite`도 지원합니다.
+종료 코드는 **0=완료, 2=부분 완료 및 성공 자료 저장, 1=설정/실행 불가 또는 모든 질의 실패**입니다.
+JSON 성공/부분/실패 결과에는 실행 정보만 있으며 원문 본문·키·인증 URL은 출력하지 않습니다.
 
-```powershell
-python -m pip install -r requirements.txt
-streamlit run app.py
+cron/systemd timer/작업 스케줄러에 연결 가능한 일회성 명령입니다. 이 프로젝트는 스케줄러를 설치하지
+않고 데몬을 실행하지 않습니다. 예약 시 Python·스크립트·DB 경로를 고정하고 중복 실행은 피하세요.
+기존 수동 키워드 CLI `scripts/collect_work24.py`와 샘플 `scripts/run_demo.py`도 유지됩니다.
+
+## 저장·이전·검증
+
+SQLite 기본 경로는 `data/job_skill_radar.sqlite`, 변경은 `JOB_RADAR_DB_PATH`입니다.
+현재 schema v4이며 첫 실행에서 v0/v1/v2/v3를 이전합니다. 먼저 기존 앱/다른 writer를 종료하세요.
+기존 파일은 `<DB>.pre-v4-from-vN-고유값.bak`으로 백업하고 이전 실패 시 rollback합니다.
+공고·원문·프로필·시각을 보존하며 current DB 재개방은 백업을 반복하지 않습니다.
+다운그레이드 시 현재 DB를 구버전 앱으로 열지 말고 종료 상태에서 이전 백업 복사본을 복구하세요.
+
+```bash
+python -B -m unittest discover -s tests
+python -B scripts/evaluate_requirements.py
+python -B scripts/run_demo.py
 ```
 
-이 작업 폴더의 가상환경을 사용한다면 다음 명령으로 실행할 수 있습니다.
+자동 검증은 API 키/실제 Work24 네트워크 없이 임시 DB와 가짜 응답으로 수행합니다.
+합성 fixture 평가는 실공고 정확도가 아닙니다. 이번 실제 API smoke는 키와 프로필이 없어 생략했습니다.
+시장 분석은 수동 공고를 제외한 수집 Work24 표본만 사용하며 전체 시장을 대표한다고 볼 수 없습니다.
+숫자 매칭·지원 추적·추세 분석·다른 사이트 자동 수집은 구현하지 않았습니다.
 
-```powershell
-.\scripts\start_dashboard.ps1
-```
-
-다른 PC에서 같은 환경을 만들 때는 아래 문서를 따릅니다.
-
-- [다른 PC에서 실행하기](docs/04_other_pc_setup.md)
-
-직무 분류 모델을 scikit-learn으로 고도화하는 단계에서는 ML 확장 패키지를 추가로 설치합니다.
-
-```powershell
-python -m pip install -r requirements-ml.txt
-```
-
-## 실제 API 수집
-
-고용24 Open API 인증키를 발급받은 뒤 `.env` 또는 환경변수에 넣습니다.
-
-```powershell
-$env:WORK24_AUTH_KEY="발급받은_인증키"
-python scripts/collect_work24.py --keyword "데이터 분석가" --keyword "데이터 엔지니어" --pages 3
-```
-
-## 폴더 구조
-
-```text
-.
-├── app.py
-├── docs/
-├── scripts/
-├── src/jobskillradar/
-├── tests/
-├── requirements.txt
-└── .env.example
-```
-
-## 포트폴리오 설명 포인트
-
-- 요구사항 분석부터 배포까지 전체 개발 생명주기를 경험했다.
-- 외부 API 데이터를 수집하고, 정제 규칙을 직접 설계했다.
-- 단순 빈도 분석을 넘어 직무별 역량 차이와 학습 추천으로 연결했다.
-- API 키가 없는 환경에서도 샘플 데이터로 재현 가능한 데모를 만들었다.
+자세한 계약은 [데이터 설계](docs/02_data_design.md), [구조](docs/TARGET_ARCHITECTURE.md),
+[로드맵](docs/ROADMAP_V2.md), [검증 기록](docs/TEST_BASELINE.md)을 참고하세요.

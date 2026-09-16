@@ -17,6 +17,7 @@ from jobskillradar.models import AnalysisResult
 from jobskillradar.pipeline import collect_work24_to_db, load_market_analysis as select_analysis, seed_sample_db
 from jobskillradar.review_ui import render_manual_create, render_posting_browser
 from jobskillradar.profile_ui import render_profile
+from jobskillradar.discovery_ui import render_discovery
 from jobskillradar.pipeline import load_profile
 from jobskillradar.recommender import recommend_skills
 from jobskillradar.role_classifier import UNKNOWN
@@ -39,7 +40,10 @@ st.title("Job Skill Radar")
 
 if next_navigation := st.session_state.pop("next_navigation", None):
     st.session_state["navigation"] = next_navigation
-navigation = st.sidebar.radio("화면", ["공고 목록", "공고 직접 등록", "내 프로필", "시장 분석"], key="navigation")
+navigation = st.sidebar.radio("화면", ["새 공고 찾기", "공고 목록", "공고 직접 등록", "내 프로필", "시장 분석"], key="navigation")
+if navigation == "새 공고 찾기":
+    render_discovery()
+    st.stop()
 if navigation == "내 프로필":
     render_profile()
     st.stop()
@@ -49,7 +53,7 @@ if navigation == "공고 직접 등록":
 if navigation == "공고 목록":
     render_posting_browser()
     st.stop()
-st.caption("시장 분석은 저장된 고용24 공고만 사용합니다. 데이터가 없으면 샘플로 표시합니다. 직접 등록한 공고는 제외됩니다.")
+st.caption("시장 분석은 저장된 고용24 공고만 사용합니다. 데이터가 없으면 샘플로 표시합니다. 직접 등록한 공고는 제외됩니다. 검색 조건에 따른 수집 표본이며 전체 시장을 대표하지 않습니다.")
 
 with st.sidebar:
     st.header("데이터")
