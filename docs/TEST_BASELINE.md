@@ -1,6 +1,6 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 3B 검증](#phase-3b-검증-2026-09-17)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
+최신 결과는 문서 끝의 [Phase 3C 검증](#phase-3c-검증-2026-09-17)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
@@ -589,3 +589,124 @@ raw free text와 추출 근거에 대한 자동 개인정보 정제도 없다.
 같은 원문·현재 taxonomy·추출기 버전 1에서 결정적으로 재계산한다. schema v2와 기존 migration/
 백업 정책을 유지한다. raw 원문을 파괴하지 않으므로 후속 규칙 개선 후 재처리할 수 있다.
 프로필·매칭·점수·LLM·지원 추적은 없으며 **Phase 4 이상은 시작하지 않았다**.
+
+## Phase 3C 검증 (2026-09-17)
+
+시작 commit은 `f4997c3` (`feat: add structured job requirement extraction`), branch는
+`refactor/v2`이며 작업 트리는 깨끗했다. 수정 전 지정 명령으로 전체 **306/306**, 샘플 CLI 12건·
+exit 0, diff 공백 오류 없음을 확인했다. Linux/Python 3.12.3, 표준 unittest/mock/임시 SQLite를 쓴다.
+
+### corpus와 보정 전후 지표
+
+기존 18개를 삭제하지 않고 **60개 수동 기대값 합성 사례**로 확장했다. 입력, review_note,
+canonical 기술별 분류, 품질, 선택적 expected_groups가 label이다. 한 사례에 여러 문장/기술이
+있을 수 있으며 총 **144개 기술 분류, 13개 그룹**이다. 기대값은 의도한 의미로 정했고 추출
+결과에 맞춰 낮추지 않았다. 실제 공고 전문·연락처·키는 포함하지 않는다.
+
+범위: 한국어/영어 필수·우대·업무, 섹션 없음, stack, 양 언어 제목, 공동 접속, 대안, 부정,
+혼합 문맥, 반복/충돌, Spring/Boot와 부모 비추론, alias, 미지원 Elixir, 모호/이상 서식,
+필드별 문맥과 keyword 메타데이터. 전용 테스트에는 결측·품질·offset·실패·그룹 반복도 있다.
+
+**운영 규칙 수정 전에** 확장 corpus를 v1으로 실행해 아래 baseline을 기록했다.
+보정 중 부정 나열의 활용형에도 같은 오탐이 있음을 추가 발견해 `negated_comma_list`의 입력만
+확장했다. 원래 문장·기대값을 모두 유지했다. 수정 전 추출기를 최종 corpus에 다시 실행한 결과도
+아래와 같았다. 최종 corpus SHA-256:
+`3ffe3bf8ddeb50fcc8dba57b5bfa40c7b630754fc301ed33967f1f1af6e14fd9`.
+
+| 개별 기술 분류 | v1 TP/FP/FN | v1 fixture precision / recall / F1 | v2 TP/FP/FN | v2 fixture precision / recall / F1 |
+|---|---|---|---|---|
+| required | 31 / 3 / 11 | 91.1765% / 73.8095% / 81.5789% | 42 / 0 / 0 | 100% / 100% / 100% |
+| preferred | 24 / 0 / 1 | 100% / 96% / 97.9592% | 25 / 0 / 0 | 100% / 100% / 100% |
+| responsibility | 12 / 0 / 1 | 100% / 92.3077% / 96% | 13 / 0 / 0 | 100% / 100% / 100% |
+| unspecified | 61 / 13 / 3 | 82.4324% / 95.3125% / 88.4058% | 64 / 0 / 0 | 100% / 100% / 100% |
+
+- 사례 완전 일치: **40/60 → 60/60**. 개별 분류 일치: **128/144 → 144/144**.
+- 클래스 불일치: **16 → 0**. 분류 FP/FN 합계: 각각 **16 → 0**.
+- 그룹 일치: **0/13 → 13/13**, 그룹 FP **0 → 0**, FN **13 → 0**.
+  v1 그룹 precision은 예측이 없어 N/A, recall/F1은 0. v2 그룹 precision/recall/F1은 각각 100%.
+  그룹 기대 분포는 required 9, preferred 3, unspecified 1이다. responsibility 그룹 표본은 없다.
+- 개별 분류와 그룹의 오탐을 합산한 안전 지표: **required FP 3 → 0, preferred FP 0 → 0**.
+
+v1 required 오탐 사례는 `comma_any_of_under_heading`(Java), `negative_heading_boundary`(Docker),
+`negated_comma_list`(Java)다. required 누락은 ability_required(SQL), qualifications_heading(Python),
+english_all_of(Java/SQL), comma_all_of(Spring Boot/JPA), explicit_spring_pair(Spring/Spring Boot),
+alias_all_of(Spring Boot/PostgreSQL), crlf_spacing(Python)다. preferred 누락은
+bold_colon_heading(Docker), responsibility 누락은 mixed_work_and_required(SQL)다.
+unspecified FP 13개는 이 양성 분류 누락에 대응하고, FN 3개는 필수 오탐에 대응한다.
+그룹 없는 v1은 모든 expected_groups 사례를 누락하며, 개별 분류가 맞아도 사례 전체는 실패한다.
+
+이 값은 **같은 수동 합성 fixture로 규칙을 보정하고 평가한 결과**다. 독립 holdout·실공고·시장·
+운영 정확도가 아니며 100%를 실서비스 정확도로 주장하지 않는다. 실제 대표 코퍼스는 미평가다.
+
+### 평가 계산·gate·재현
+
+평가 단위는 (case, canonical skill, effective class)다. 잘못된 분류는 예측 클래스의 FP이자
+기대 클래스의 FN이다. 누락/추가 기술과 중복 결과도 센다. 그룹은 relation/class/구성원 집합을
+비교하되 반복 그룹 개수는 보존한다. 개별 기술 지표와 그룹 지표는 별도로 보고하며 안전 FP
+합계만 함께 표시한다. 분모가 없는 precision/recall/F1은 100%로 꾸미지 않고 N/A(null)다.
+provenance 정확성은 별도 원문 slice·section·규칙 테스트가 검사한다.
+
+```bash
+python -B scripts/evaluate_requirements.py
+python -B scripts/evaluate_requirements.py --json
+```
+
+`--fixtures PATH`로 다른 수동 label 파일을 검사할 수 있다. 기본 CLI는 각 클래스 fixture
+precision/recall/F1·FP/FN, 필수/우대 오탐, 그룹 지표, 불일치 사례를 출력한다. JSON에는 모든
+세부 지표와 corpus hash가 있다. 모든 사례의 기술 분류·그룹·품질이 정확히 맞아야 **exit 0**이다.
+불일치가 있으면 **exit 1**, 파일/입력/추출 오류도 성공으로 숨기지 않는다. 필수/우대 오탐 0이
+필수 조건이며, 전부 미분류/빈 결과로 만들어 누락을 늘려도 통과하지 못하는 엄격한 회귀 gate다.
+실공고 정밀도 목표 수치를 임의로 설정한 것이 아니다.
+
+기존 버전 기준선 재현(현재 corpus/평가기로 기존 commit의 순수 추출 함수만 실행):
+
+```bash
+PYTHONPATH=src python -B - <<'PY'
+import json
+import subprocess
+from pathlib import Path
+from jobskillradar.requirement_evaluation import evaluate_requirements
+namespace = {'__name__': 'jobskillradar._baseline', '__package__': 'jobskillradar'}
+source = subprocess.check_output([
+    'git', 'show', 'f4997c3:src/jobskillradar/requirement_extractor.py'
+], text=True)
+exec(compile(source, 'phase3b_baseline', 'exec'), namespace)
+cases = json.loads(Path('tests/fixtures/requirements/evaluation.json').read_text())
+print(json.dumps(evaluate_requirements(cases, extractor=namespace['extract_requirements']), indent=2))
+PY
+```
+
+### 최종 회귀 검증
+
+전체 **328/328 통과**, failures/errors/expected failures/skips/unexpected successes 모두 0.
+기존 306개를 유지하고 22개 method를 추가했다. 기존 버전 assertion만 의미 변경에 맞춰 1→2로
+갱신했다. 60개 fixture와 subTest는 method 수에 중복 합산하지 않았다.
+
+| 집중 검증 | 결과 |
+|---|---|
+| requirement extractor | 33/33 |
+| requirement evaluation | 12/12 |
+| pipeline requirements | 8/8, 위 둘과 합계 53개 |
+| Work24 list/detail parser/client | 41/41 |
+| migration | 19/19, schema 변경 없음 |
+| storage + boundary / detail persistence / persistence integrity | 16/16, 7/7, 15/15 |
+| pipeline 전체 | 24/24 |
+| normalizer / skill extractor / role classifier | 11/11, 42/42, 34/34 |
+| analyzer / recommender | 17/17, 24/24 |
+| evaluation CLI | 60/60사례·144/144분류·13/13그룹, exit 0 |
+| sample CLI / diff check | 기존 출력 유지·exit 0 / 공백 오류 없음 |
+
+전체 unittest, 평가 CLI, 위 각 suite의 `python -B -m unittest discover -s tests -p FILE_PATTERN`,
+`python -B scripts/run_demo.py`, `git diff --check`, `git status`로 검증했다.
+샘플은 12건, 데이터 분석가 6/ML 3/데이터 엔지니어 2/BI 1이며 추천 순서와 분모는
+Python(5/6) → A/B Test(2/6) → Tableau(2/6) → Statistics(1/6) → GA4(1/6)로 유지한다.
+
+추출/평가 테스트는 HTTP/DB 접근을 차단하고 application은 임시 DB와 가짜 transport를 쓴다.
+키·실제 네트워크·사용자 DB가 필요 없다. 실 Work24 smoke는 수행하지 않았고 Streamlit은
+변경/실행하지 않았다. 새 persistence나 migration은 없으며 schema v2, 원문 저장·실패 갱신
+보존·연결 종료 경계·시장 분석·직무 분류·추천·경력 정규화를 유지한다.
+
+중첩 AND/OR, 복잡한 부정/예외, 문장 간 참조, 임의 제목/HTML/표, 미지원 기술·동의어는
+여전히 제한적이다. alias/parent-child 추론 규칙은 바꾸지 않았다. 빈 required를 요건 없음으로
+읽거나 any_of를 여러 독립 필수로 읽어서는 안 된다. 미래 소비자는 개별 요약과 그룹·원문·품질을
+함께 처리해야 한다. 사용자 프로필·매칭·점수·Phase 4 이상은 시작하지 않았다.

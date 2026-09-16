@@ -124,5 +124,341 @@
     "detail": {"job_content": "Java required, Python; Docker experience preferred. AWS 경험 없어도 지원 가능", "preferred_conditions": "SQL 필수"},
     "expected": {"Java": "required", "Python": "unspecified", "Docker": "preferred", "AWS": "unspecified", "SQL": "required"},
     "quality": "requirements_extracted"
+  },
+  {
+    "id": "ability_required",
+    "review_note": "An explicit applicant ability condition is required.",
+    "detail": {"job_content": "SQL 사용 가능자"},
+    "expected": {"SQL": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "english_proficiency",
+    "review_note": "Bounded English possession cues.",
+    "detail": {"job_content": "Python proficiency required\nMust have Kubernetes experience"},
+    "expected": {"Python": "required", "Kubernetes": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "short_experience_needed",
+    "review_note": "Experience is explicitly needed, unlike an operational task.",
+    "detail": {"job_content": "Spring Boot 경험이 필요합니다"},
+    "expected": {"Spring Boot": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "english_preferences",
+    "review_note": "Explicit preference synonyms without headings.",
+    "detail": {"job_content": "AWS experience preferred\nDocker is a plus\nKubernetes nice to have"},
+    "expected": {"AWS": "preferred", "Docker": "preferred", "Kubernetes": "preferred"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "duties_no_heading",
+    "review_note": "Action language describes work, not applicant possession.",
+    "detail": {"job_content": "Java 기반 API 개발\nSpring Boot 서비스 운영\nKafka 파이프라인 관리\nAWS 인프라 배포"},
+    "expected": {"Java": "responsibility", "Spring Boot": "responsibility", "Kafka": "responsibility", "AWS": "responsibility"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "neutral_stack_labels",
+    "review_note": "Stack and unknown colon labels are neutral.",
+    "detail": {"job_content": "사용 기술: Redis / Kafka\nBackend: Kotlin, PostgreSQL"},
+    "expected": {"Redis": "unspecified", "Kafka": "unspecified", "Kotlin": "unspecified", "PostgreSQL": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "qualifications_heading",
+    "review_note": "A complete Qualifications heading denotes applicant conditions.",
+    "detail": {"job_content": "Qualifications\nPython"},
+    "expected": {"Python": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "heading_transitions",
+    "review_note": "Bullets, brackets and section transitions preserve local scope.",
+    "detail": {"job_content": "• 필수요건:\nJava\n[우대사항]\nSQL\n담당업무\nKafka\n주요업무\nAWS"},
+    "expected": {"Java": "required", "SQL": "preferred", "Kafka": "responsibility", "AWS": "responsibility"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "english_all_of",
+    "review_note": "One trailing cue applies to a bounded all-of list.",
+    "detail": {"job_content": "Java and SQL required"},
+    "expected": {"Java": "required", "SQL": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "all_of", "requirement_type": "required", "skills": ["Java", "SQL"]}]
+  },
+  {
+    "id": "korean_all_of",
+    "review_note": "The Korean conjunction applies the same explicit cue to both skills.",
+    "detail": {"job_content": "Java와 SQL 경험 필수"},
+    "expected": {"Java": "required", "SQL": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "all_of", "requirement_type": "required", "skills": ["Java", "SQL"]}]
+  },
+  {
+    "id": "comma_all_of",
+    "review_note": "A pure skill list shares one trailing cue.",
+    "detail": {"job_content": "Spring Boot, JPA, MySQL 경험 필수"},
+    "expected": {"Spring Boot": "required", "JPA": "required", "MySQL": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "all_of", "requirement_type": "required", "skills": ["Spring Boot", "JPA", "MySQL"]}]
+  },
+  {
+    "id": "korean_any_of",
+    "review_note": "Only the any-of group is mandatory; members are not independently mandatory.",
+    "detail": {"job_content": "Java 또는 Kotlin 중 하나 경험 필수"},
+    "expected": {"Java": "unspecified", "Kotlin": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "required", "skills": ["Java", "Kotlin"]}]
+  },
+  {
+    "id": "slash_any_of",
+    "review_note": "Explicit one-of language resolves slash grouping but does not invent a requirement cue.",
+    "detail": {"job_content": "Java/Kotlin 중 하나 이상"},
+    "expected": {"Java": "unspecified", "Kotlin": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "unspecified", "skills": ["Java", "Kotlin"]}]
+  },
+  {
+    "id": "english_any_of",
+    "review_note": "OR is not two independent mandatory skills.",
+    "detail": {"job_content": "Python or Java required"},
+    "expected": {"Python": "unspecified", "Java": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "required", "skills": ["Python", "Java"]}]
+  },
+  {
+    "id": "preferred_any_of",
+    "review_note": "Preference applies to a choice, not independently to each member.",
+    "detail": {"job_content": "AWS 또는 GCP 경험자 우대"},
+    "expected": {"AWS": "unspecified", "GCP": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "preferred", "skills": ["AWS", "GCP"]}]
+  },
+  {
+    "id": "comma_any_of_under_heading",
+    "review_note": "Do not split a leading alternative into an independent required skill.",
+    "detail": {"job_content": "Requirements\nJava, Kotlin 또는 Python 중 하나 필수"},
+    "expected": {"Java": "unspecified", "Kotlin": "unspecified", "Python": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "required", "skills": ["Java", "Kotlin", "Python"]}]
+  },
+  {
+    "id": "negation_variants",
+    "review_note": "Bounded negation overrides a positive section.",
+    "detail": {"job_content": "필수요건\nAWS 필수가 아님\nPython은 요구하지 않습니다\nDocker is not required\nKafka experience is not necessary\nKubernetes 경험 없어도 지원 가능합니다"},
+    "expected": {"AWS": "unspecified", "Python": "unspecified", "Docker": "unspecified", "Kafka": "unspecified", "Kubernetes": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "mixed_korean_classes",
+    "review_note": "Independent local cues must not spread across a comma.",
+    "detail": {"job_content": "Java 필수, Kafka 우대"},
+    "expected": {"Java": "required", "Kafka": "preferred"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "mixed_work_and_preference",
+    "review_note": "Duty and preference clauses have distinct scope.",
+    "detail": {"job_content": "Spring Boot API 개발, AWS 경험자 우대"},
+    "expected": {"Spring Boot": "responsibility", "AWS": "preferred"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "mixed_work_and_required",
+    "review_note": "Explicit use-at-work language is responsibility only.",
+    "detail": {"job_content": "SQL 사용 업무, Python은 필수"},
+    "expected": {"SQL": "responsibility", "Python": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "required_preferred_conflict",
+    "review_note": "Independent evidence uses strongest precedence and keeps both occurrences.",
+    "detail": {"job_content": "Requirements\nJava\nPreferred\nJava"},
+    "expected": {"Java": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "work_and_preference_conflict",
+    "review_note": "Preference outranks work evidence without erasing it.",
+    "detail": {"job_content": "Responsibilities\nAWS\nPreferred\nAWS"},
+    "expected": {"AWS": "preferred"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "repeated_skill",
+    "review_note": "Repeated occurrences are provenance, not duplicated display skills.",
+    "detail": {"job_content": "Java required\nJava required\nJava preferred"},
+    "expected": {"Java": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "spring_boot_only",
+    "review_note": "No Spring parent or sibling inference.",
+    "detail": {"job_content": "Spring Boot required"},
+    "expected": {"Spring Boot": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "explicit_spring_pair",
+    "review_note": "Both explicitly named technologies count independently.",
+    "detail": {"job_content": "Spring and Spring Boot required"},
+    "expected": {"Spring": "required", "Spring Boot": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "all_of", "requirement_type": "required", "skills": ["Spring", "Spring Boot"]}]
+  },
+  {
+    "id": "jpa_no_hibernate",
+    "review_note": "No ORM implementation inference.",
+    "detail": {"job_content": "JPA required"},
+    "expected": {"JPA": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "aws_no_containers",
+    "review_note": "No container ecosystem inference.",
+    "detail": {"job_content": "AWS required"},
+    "expected": {"AWS": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "alias_all_of",
+    "review_note": "Grouping uses the existing canonical aliases.",
+    "detail": {"job_content": "springboot and postgres required"},
+    "expected": {"Spring Boot": "required", "PostgreSQL": "required"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "all_of", "requirement_type": "required", "skills": ["Spring Boot", "PostgreSQL"]}]
+  },
+  {
+    "id": "alias_any_of",
+    "review_note": "Aliases preserve any-of semantics.",
+    "detail": {"job_content": "k8s or Docker preferred"},
+    "expected": {"Kubernetes": "unspecified", "Docker": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "preferred", "skills": ["Kubernetes", "Docker"]}]
+  },
+  {
+    "id": "ambiguous_possession",
+    "review_note": "Possession mentions alone have no mandatory meaning.",
+    "detail": {"job_content": "Java 경험\nSQL 역량\nPython 관련 프로젝트"},
+    "expected": {"Java": "unspecified", "SQL": "unspecified", "Python": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "complex_boolean",
+    "review_note": "Mixed AND/OR is unsupported; do not invent a boolean tree.",
+    "detail": {"job_content": "Requirements\nJava and SQL or Python required"},
+    "expected": {"Java": "unspecified", "SQL": "unspecified", "Python": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "unknown_alternative_member",
+    "review_note": "An unsupported alternative member cannot be silently removed from a group.",
+    "detail": {"job_content": "Requirements\nJava or Elixir required"},
+    "expected": {"Java": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "unsupported_technology",
+    "review_note": "No fake canonical skill is created for an unsupported technology.",
+    "detail": {"job_content": "Elixir experience required"},
+    "expected": {},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "bold_colon_heading",
+    "review_note": "A colon inside the complete bold wrapper is a heading punctuation variant.",
+    "detail": {"job_content": "Requirements\nJava\n**Preferred:**\nDocker"},
+    "expected": {"Java": "required", "Docker": "preferred"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "negative_heading_boundary",
+    "review_note": "A bounded negative heading terminates mandatory scope.",
+    "detail": {"job_content": "Requirements\nJava\nNot required\nDocker"},
+    "expected": {"Java": "required", "Docker": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "crlf_spacing",
+    "review_note": "Whitespace and CRLF do not alter exact provenance offsets.",
+    "detail": {"job_content": "  [Qualifications]:\r\n\r\n • Python\r\nNice   to Have:\r\n - Docker"},
+    "expected": {"Python": "required", "Docker": "preferred"},
+    "quality": "requirements_extracted",
+    "expected_groups": []
+  },
+  {
+    "id": "non_skill_obligation",
+    "review_note": "Mandatory attendance is not mandatory technology knowledge.",
+    "detail": {"job_content": "Java developers are required to attend a meeting"},
+    "expected": {"Java": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "mixed_conjunction_scope",
+    "review_note": "Multiple predicates are not a pure shared-cue skill list.",
+    "detail": {"job_content": "Requirements\nJava required and Python mentioned"},
+    "expected": {"Java": "unspecified", "Python": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "keyword_required_is_metadata",
+    "review_note": "Keyword wording cannot assert applicant requirements.",
+    "detail": {"keywords": ["Java required", "SQL preferred"]},
+    "expected": {"Java": "unspecified", "SQL": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "choice_and_independent_evidence",
+    "review_note": "An independent preference remains separate from the required choice.",
+    "detail": {"job_content": "Java or Kotlin required\nJava preferred"},
+    "expected": {"Java": "preferred", "Kotlin": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "required", "skills": ["Java", "Kotlin"]}]
+  },
+  {
+    "id": "negated_comma_list",
+    "review_note": "Do not classify a split prefix positively when a pure list is negated.",
+    "detail": {"job_content": "Requirements\nJava, SQL not required\nJava, SQL 필수가 아닙니다\nJava, SQL 경험은 요구하지 않습니다\nJava, SQL 경험 없어도 지원 가능\nJava, SQL 경험 없어도 지원 가능합니다\nJava, SQL experience is not required\nJava, SQL experience is not necessary\nJava, SQL not preferred"},
+    "expected": {"Java": "unspecified", "SQL": "unspecified"},
+    "quality": "requirement_evidence_present_but_unclassified",
+    "expected_groups": []
+  },
+  {
+    "id": "preferred_field_alternative",
+    "review_note": "Field preference scopes a choice, not each technology.",
+    "detail": {"preferred_conditions": "AWS 또는 GCP"},
+    "expected": {"AWS": "unspecified", "GCP": "unspecified"},
+    "quality": "requirements_extracted",
+    "expected_groups": [{"relation": "any_of", "requirement_type": "preferred", "skills": ["AWS", "GCP"]}]
   }
 ]

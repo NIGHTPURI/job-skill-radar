@@ -33,6 +33,7 @@ class RequirementExtractorTest(unittest.TestCase):
     def assert_provenance(self, detail, result):
         items = [e for skill in result["skills"] for e in skill["evidence"]]
         items += result["unclassified_evidence"]
+        items += [group["evidence"] for group in result["groups"]]
         for evidence in items:
             field = detail[evidence["source_field"]]
             if evidence["source_index"] is not None:
@@ -193,7 +194,7 @@ class RequirementExtractorTest(unittest.TestCase):
         second = extract_requirements(detail)
         self.assertEqual(first, second)
         self.assertEqual(first["extractor_version"], REQUIREMENT_EXTRACTOR_VERSION)
-        self.assertEqual(REQUIREMENT_EXTRACTOR_VERSION, 1)
+        self.assertEqual(REQUIREMENT_EXTRACTOR_VERSION, 2)
         self.assertEqual(first["detail_fetched_at"], detail["fetched_at"])
         self.assertEqual(detail, original)
         self.assert_provenance(detail, first)
@@ -250,6 +251,111 @@ class RequirementExtractorTest(unittest.TestCase):
         self.assertIsNone(result["detail_fetched_at"])
         self.assertEqual(detail, original)
         self.assert_provenance(detail, result)
+
+    def test_bounded_shared_cues_form_all_of_groups(self):
+        for text, kind in (("Java and SQL required", "required"), ("Java와 SQL 경험 필수", "required"),
+                           ("Java 및 SQL 사용 경험이 필요합니다", "required"),
+                           ("Must have Java and SQL experience", "required"),
+                           ("Java, SQL 경험자 우대", "preferred")):
+            with self.subTest(text=text):
+                detail = source_detail(job_content=text)
+                result = extract_requirements(detail)
+                self.assertEqual(classifications(result), {"Java": kind, "SQL": kind})
+                self.assertEqual(len(result["groups"]), 1)
+                group = result["groups"][0]
+                self.assertEqual((group["relation"], group["requirement_type"], group["skills"]),
+                                 ("all_of", kind, ["SQL", "Java"]))
+                self.assertEqual(group["evidence"]["evidence_text"], text)
+                self.assert_provenance(detail, result)
+
+    def test_any_of_class_is_never_an_independent_member_requirement(self):
+        for text, field, kind in (("Java 또는 Kotlin 중 하나 경험 필수", "job_content", "required"),
+                                  ("Java or Kotlin required", "job_content", "required"),
+                                  ("Java/Kotlin 중 하나 이상", "job_content", "unspecified"),
+                                  ("Java 또는 Kotlin", "preferred_conditions", "preferred")):
+            with self.subTest(text=text):
+                detail = source_detail(**{field: text})
+                result = extract_requirements(detail)
+                self.assertEqual(classifications(result), {"Java": "unspecified", "Kotlin": "unspecified"})
+                group = result["groups"][0]
+                self.assertEqual((group["relation"], group["requirement_type"]), ("any_of", kind))
+                self.assertEqual(group["evidence"]["requirement_type"], kind)
+                for skill in result["skills"]:
+                    self.assertEqual(skill["evidence"][0]["requirement_type"], "unspecified")
+                    self.assertEqual(skill["evidence"][0]["relation"], "any_of")
+                self.assert_provenance(detail, result)
+
+    def test_unsupported_nested_or_unknown_choices_never_shrink_to_known_members(self):
+        for text in ("Java or Elixir required", "Java and SQL or Python required",
+                     "(Java and SQL) or Python required", "Java/SQL required",
+                     "Java required and Python mentioned", "Java, Elixir 또는 Kotlin 필수"):
+            with self.subTest(text=text):
+                result = extract_requirements(source_detail(job_content="Requirements\n" + text))
+                self.assertTrue(result["skills"])
+                self.assertTrue(all(s["requirement_type"] == "unspecified" for s in result["skills"]))
+                self.assertEqual(result["groups"], [])
+
+    def test_negated_shared_list_and_negative_heading_end_positive_scope(self):
+        for text in ("Java, SQL not required", "Java and SQL experience not necessary", "Java, SQL 필수가 아님",
+                     "Java, SQL 필수가 아닙니다", "Java, SQL 경험은 요구하지 않습니다",
+                     "Java, SQL 경험 없어도 지원 가능", "Java, SQL 경험 없어도 지원 가능합니다",
+                     "Java, SQL experience is not required", "Java, SQL experience is not necessary",
+                     "Java, SQL not preferred"):
+            with self.subTest(text=text):
+                result = extract_requirements(source_detail(job_content="Requirements\n" + text))
+                self.assertEqual(classifications(result), {"Java": "unspecified", "SQL": "unspecified"})
+                self.assertEqual(result["groups"], [])
+        for heading in ("Not required", "Not necessary", "필수가 아님", "필수가 아닙니다", "요구하지 않음", "요구하지 않습니다"):
+            result = extract_requirements(source_detail(job_content="Requirements\nJava\n[" + heading + "]\nSQL"))
+            self.assertEqual(classifications(result), {"Java": "required", "SQL": "unspecified"})
+
+    def test_group_and_independent_evidence_aggregate_without_erasing_either(self):
+        detail = source_detail(job_content="Java or Kotlin required\nJava preferred\nResponsibilities\nJava\nJava required")
+        result = extract_requirements(detail)
+        self.assertEqual(classifications(result), {"Java": "required", "Kotlin": "unspecified"})
+        java = next(s for s in result["skills"] if s["skill"] == "Java")
+        self.assertEqual([e["requirement_type"] for e in java["evidence"]],
+                         ["unspecified", "preferred", "responsibility", "required"])
+        self.assertEqual(len(result["groups"]), 1)
+        self.assertEqual(result["groups"][0]["requirement_type"], "required")
+        self.assert_provenance(detail, result)
+
+    def test_group_order_repetition_aliases_and_offsets_are_deterministic(self):
+        text = "【Qualifications】\r\n • springboot or postgres required\r\n\r\n • springboot or postgres required\r\n**Preferred:**\r\n k8s and Docker preferred"
+        detail = source_detail(job_content=text)
+        before = copy.deepcopy(detail)
+        result = extract_requirements(detail)
+        self.assertEqual(result, extract_requirements(dict(reversed(list(detail.items())))))
+        self.assertEqual(detail, before)
+        self.assertEqual([g["relation"] for g in result["groups"]], ["any_of", "any_of", "all_of"])
+        self.assertEqual(result["groups"][0]["skills"], ["PostgreSQL", "Spring Boot"])
+        self.assertNotEqual(result["groups"][0]["evidence"]["evidence_start"], result["groups"][1]["evidence"]["evidence_start"])
+        self.assert_provenance(detail, result)
+        result["groups"][0]["evidence"]["evidence_text"] = "changed"
+        self.assertNotEqual(result, extract_requirements(detail))
+
+    def test_groups_do_not_introduce_new_global_quality_states(self):
+        for text, expected in (("Java or Kotlin required", "requirements_extracted"),
+                               ("Java/Kotlin 중 하나", "requirement_evidence_present_but_unclassified")):
+            self.assertEqual(extract_requirements(source_detail(job_content=text))["quality_status"], expected)
+        self.assertEqual(extract_requirements(None)["groups"], [])
+        self.assertEqual(extract_requirements(source_detail())["groups"], [])
+
+    def test_shared_list_rule_does_not_spread_independent_clause_cues(self):
+        for text in ("Java required, Python", "Java 필수, Python", "Java required and Python mentioned"):
+            result = extract_requirements(source_detail(job_content=text))
+            self.assertEqual(classifications(result)["Python"], "unspecified")
+            self.assertEqual(result["groups"], [])
+
+    def test_qualification_and_wrapped_headings_do_not_make_prose_a_section(self):
+        for text in ("Qualifications are discussed with Java teams", "**Preferred:** discussions about Java"):
+            result = extract_requirements(source_detail(job_content=text + "\nSQL"))
+            self.assertEqual(classifications(result)["SQL"], "unspecified")
+
+    def test_keyword_alternatives_never_create_requirement_groups(self):
+        result = extract_requirements(source_detail(keywords=["Java or Kotlin required", "SQL and Python preferred"]))
+        self.assertEqual(result["groups"], [])
+        self.assertTrue(all(s["requirement_type"] == "unspecified" for s in result["skills"]))
 
 
 if __name__ == "__main__":

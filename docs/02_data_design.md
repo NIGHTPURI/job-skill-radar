@@ -1,6 +1,99 @@
 # 데이터 설계
 
+## Phase 3C 요건 의미 보강·평가 계약
+
+2026-09-17 완료. 아래 Phase 3B 기록 중 접속·대안·제목·추출기 버전 설명은 이 절이 대체한다.
+원문 저장, 기존 네 분류, 필드별 의미, 비기술 조건과 시장 분석 경계는 유지한다.
+**높은 재현율보다 높은 정밀도를 우선**하며 모호한 표현은 unspecified로 남긴다.
+`REQUIREMENT_EXTRACTOR_VERSION = 2`: 평가 도구 추가가 아니라 실제 분류 의미 변경 때문에 올렸다.
+
+### 제한된 나열과 그룹
+
+`RequirementExtraction.groups`와 `RequirementGroup`을 추가했다. 그룹은 `relation`(all_of/any_of),
+canonical `skills`, 그룹 전체의 `requirement_type`, 정확한 원문 `evidence` 하나를 갖는다.
+각 RequirementEvidence에도 `relation`(independent/all_of/any_of)을 추가했다.
+그룹 ID·중첩 논리식·점수·확률은 없다. 그룹 하나는 원문의 한 위치이며 반복 위치도 버리지 않는다.
+그룹·근거는 필드/원문 순서, 구성원·기술 목록은 기존 taxonomy 순서다.
+
+| 원문 | 개별 기술 요약 | 그룹 |
+|---|---|---|
+| Java required | Java required | 없음, independent 근거 |
+| Java and SQL required | Java·SQL required | all_of / required |
+| Java와 SQL 경험 필수 | Java·SQL required | all_of / required |
+| Spring Boot, JPA, MySQL 경험 필수 | 세 기술 required | all_of / required |
+| Python or Java required | 두 기술 unspecified | any_of / required |
+| AWS 또는 GCP 경험자 우대 | 두 기술 unspecified | any_of / preferred |
+| Java/Kotlin 중 하나 이상 | 두 기술 unspecified | any_of / unspecified |
+
+기존 taxonomy의 기술명/alias만으로 구성된 나열과 제한된 접속사·공동 단서가 **행 전체에 맞을 때**
+처리한다. and/및/와/과/쉼표의 명확한 공동 단서는 all_of, or/또는/혹은/중 하나는 any_of다.
+슬래시는 `중 하나` 등 대안 단서가 있어야 선택 관계를 확정한다. `Java/SQL required`는 모호하므로
+unspecified다. 복합 AND/OR, 괄호 중첩, 여러 술어, 미지원 기술이 섞인 대안은 그룹을 만들지 않는다.
+대안 문장은 쉼표로 잘라 앞부분만 독립 필수로 승격하지 않는다. 미해석 대안이 있는 행 전체를
+미분류로 남길 수 있으므로 명확한 다른 조각까지 누락되는 보수적 한계가 있다.
+
+all_of 그룹은 명시적 공동 필수/우대 단서가 있을 때 만든다. 제목/필드만으로 분류한 일반 목록은
+기존 독립 근거 계약을 유지한다. `Java required, Python`처럼 각각의 조각에 단서가 있는 문장은
+공동 나열 문법에 맞지 않아 Python으로 필수 의미가 퍼지지 않는다. keywords는 언제나 검색
+메타데이터이며 그룹을 생성하지 않는다. 우대 필드의 명확한 대안은 그룹에만 preferred를 적용한다.
+
+any_of 구성원의 해당 근거는 **requirement_type=unspecified, rule=alternative_member**다.
+그룹의 근거에는 실제 공동 분류와 explicit_required/explicit_preferred/section_heading/
+preferred_field 등의 규칙이 남는다. 같은 원문 위치로 연결해 검토할 수 있다.
+따라서 기존 개별 기술 목록만 읽어도 대안을 여러 독립 mandatory 기술로 오독하지 않는다.
+미래 소비자는 선택 조건을 놓치지 않도록 반드시 groups도 읽어야 한다.
+
+독립 근거 집계는 required > preferred > responsibility > unspecified를 유지한다.
+예를 들어 `Java or Kotlin required`와 별도의 `Java preferred`가 있으면 Java 요약은 preferred,
+Kotlin은 unspecified이며 required any_of 그룹은 별도로 보존된다. 같은 조각의 필수/우대 충돌은
+우선순위로 강제 해소하지 않는다. 독립 긍정·부정 근거의 논리적 일관성까지 해결하지 않으므로
+대표 분류 외에 모든 근거를 함께 검토해야 한다.
+
+### 부정·제목·provenance
+
+기존 명백한 부정(not required/not necessary/필수가 아님/필수가 아닙니다/요구하지 않음/
+요구하지 않습니다/없어도 지원 가능 등)은 unspecified를 유지한다. 명확한 기술 나열에 걸린
+지원 부정 표현은 쉼표 앞 기술까지 함께 미분류로 남긴다. 이를 긍정 그룹으로 만들지 않는다.
+제한된 완전 일치 부정 제목 `Not required`, `Not necessary`, `필수가 아님`, `필수가 아닙니다`,
+`요구하지 않음`, `요구하지 않습니다`는 이전 필수 섹션을 중립으로 끊는다.
+일반 문장의 부정은 다음 행의 새 섹션을 추측하지 않으며 일반 언어의 모든 활용형을 해석하지 않는다.
+
+`Qualifications`를 필수 제목 목록에 추가하고 `**Preferred:**`, `[Qualifications]:` 같은
+완전한 wrapper 안팎의 콜론을 허용했다. blank line·bullet·연속 공백·CRLF 처리는 원문을 바꾸지
+않는다. 임의 prose를 제목으로 확대 해석하지 않는다. `SQL 사용 가능자`는 명시적 능력 조건,
+`SQL 사용 업무`는 업무 표현으로 구별한다.
+
+source_field/source_index, evidence_text, evidence_start/end, section_heading/section_start,
+rule은 모두 유지한다. 그룹·개별 근거에서 `source[start:end] == evidence_text`를 검사한다.
+정규화된 복사본의 offset을 원문 offset으로 가장하지 않는다. raw 상세·fetched_at을 덮어쓰지 않는다.
+
+### 품질·재처리·검증 범위
+
+네 quality_status 이름은 바꾸지 않았다. `requirements_extracted`에는 분류된 기술 **또는 그룹**이
+하나 이상 있는 경우를 포함한다. 따라서 모든 개별 기술이 unspecified여도 명시적 required
+any_of가 있으면 이 상태다. unspecified 그룹만 있으면 미분류 상태다. 상세 없음과 근거 미검출은
+여전히 다르며 빈 required 목록을 고용주의 필수 요건 부재로 해석하면 안 된다.
+
+파생 persistence는 필요하지 않아 도입하지 않았다. **schema v2 유지, migration 없음**.
+저장된 같은 원문·taxonomy·추출기 버전으로 결정적으로 재계산한다. 기존 DB 종료 후 조회 API와
+inspect CLI가 추가 그룹을 그대로 반환한다. 실패한 HTTP refresh는 기존 raw를 유지하고,
+추출 실패는 전파되며 raw나 이전 결과를 지우지 않는다. 수집·시장 analyzer·role classifier·
+recommender·경력 정규화·UI에는 변경이 없다. 매칭·프로필·LLM·Phase 4는 시작하지 않았다.
+
+기존 18개를 유지한 수동 검토 합성 corpus 60개로 검증한다. v1은 40/60사례·128/144분류 일치,
+필수 오탐 3건이었고 v2는 60/60·144/144·13/13그룹 일치, 필수/우대 오탐 0건이다.
+[기준선·최종 클래스별 fixture 지표와 재현법](TEST_BASELINE.md#phase-3c-검증-2026-09-17)을 따른다.
+**합성 fixture precision/recall/F1이며 실공고·시장·운영 정확도가 아니다.** 별도 holdout도 아니다.
+실 Work24 smoke는 수행하지 않았고 네트워크·API 키는 자동 검증에 필요 없다.
+
+중첩 논리, 복잡한 부정·예외, 문장 간 참조, 임의 제목, HTML/표, 알려지지 않은 동의어는 여전히
+지원 범위 밖이다. Elixir 등 taxonomy 밖 기술은 canonical로 추가하지 않으며 기술을 모르는
+대안에서 알려진 구성원만으로 그룹을 축소하지 않는다. 전체 실공고에서 누락/오탐이 없다는
+보장은 없다. 미래 매칭 전에 대표성 있는 별도 corpus와 그룹/미분류/충돌 소비 정책이 필요하다.
+
 ## Phase 3B 구조화 요건과 데이터 품질 계약
+
+이 절은 Phase 3B 완료 당시 기록이며 변경된 의미는 위 Phase 3C 계약을 따른다.
 
 2026-09-17 기준. `requirement_extractor.extract_requirements(detail)`은 저장/파싱된 상세 원문
 또는 `None`을 받는 순수 함수다. 입력을 수정하지 않고 HTTP·SQLite·UI·환경·현재 시각을

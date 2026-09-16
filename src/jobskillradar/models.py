@@ -133,12 +133,27 @@ class RequirementEvidence(TypedDict):
     section_start: int | None
     requirement_type: RequirementType
     rule: str  # Stable explanation code; never a probability.
+    relation: Literal["independent", "all_of", "any_of"]
 
 
 class SkillRequirement(TypedDict):
     skill: str
     requirement_type: RequirementType
     evidence: list[RequirementEvidence]
+
+
+class RequirementGroup(TypedDict):
+    """One bounded source occurrence, not a nested boolean expression.
+
+    any_of applies the class to the choice, never independently to its members.
+    Member skill summaries receive unspecified from this occurrence. Independent
+    evidence can still strengthen a member's summary. All provenance is retained.
+    """
+
+    relation: Literal["all_of", "any_of"]
+    skills: list[str]
+    requirement_type: RequirementType
+    evidence: RequirementEvidence
 
 
 class SourceCondition(TypedDict):
@@ -155,5 +170,6 @@ class RequirementExtraction(TypedDict):
     detail_fetched_at: str | None
     quality_status: RequirementQuality
     skills: list[SkillRequirement]
+    groups: list[RequirementGroup]
     unclassified_evidence: list[RequirementEvidence]
     conditions: list[SourceCondition]

@@ -17,7 +17,7 @@ from .skill_extractor import extract_skills
 from .skill_taxonomy import SKILL_ALIASES
 
 
-REQUIREMENT_EXTRACTOR_VERSION = 1
+REQUIREMENT_EXTRACTOR_VERSION = 2
 REQUIREMENT_PRECEDENCE = {"required": 0, "preferred": 1, "responsibility": 2, "unspecified": 3}
 TEXT_FIELDS = (
     "job_content", "preferred_conditions", "other_preferred_conditions",
@@ -28,12 +28,13 @@ CONDITION_FIELDS = ("raw_career_condition", "education", "employment_type", "wor
 
 _HEADINGS: dict[str, RequirementType] = {
     **dict.fromkeys(("자격요건", "지원자격", "필수요건", "필수사항", "필수", "requirements",
-                     "required", "required skills", "must have"), "required"),
+                     "required", "required skills", "must have", "qualifications"), "required"),
     **dict.fromkeys(("우대사항", "우대조건", "우대", "preferred", "preferred skills",
                      "nice to have", "nice-to-have"), "preferred"),
     **dict.fromkeys(("주요업무", "담당업무", "업무내용", "responsibilities", "duties"), "responsibility"),
     **dict.fromkeys(("기술스택", "사용 기술", "tech stack", "technologies", "복리후생", "혜택",
-                     "전형절차", "회사소개", "benefits", "about us"), "unspecified"),
+                     "전형절차", "회사소개", "benefits", "about us", "not required", "not necessary",
+                     "필수가 아님", "필수가 아닙니다", "요구하지 않음", "요구하지 않습니다"), "unspecified"),
 }
 # Wrappers must surround the entire label; prose mentioning a heading is not one.
 _DECORATION = re.compile(r"^\s*(?:#{1,6}\s+|[-*•●]\s+|\d+[.)]\s+)?")
@@ -41,6 +42,7 @@ _REQUIRED = re.compile(
     r"(?<!\w)필수(?:입니다|사항|요건)?(?!\w)|"
     r"반드시[^,;.!?\n]{0,60}(?:경험|역량|지식|능력|보유|숙지)|"
     r"(?:경험|역량|지식|이해|능력)(?:이|가|은|는)?\s*필요합니다|"
+    r"(?<!\w)사용\s+가능자(?!\w)|"
     r"(?<!\w)(?:required|mandatory|must[ -]+have)(?!\w)", re.I,
 )
 _PREFERRED = re.compile(
@@ -58,7 +60,7 @@ _NEGATED = re.compile(
 )
 _UNCERTAIN = re.compile(r'[?？"“”<>|\[\]【】]|여부|미정|검토|협의|예시|가정|\b(?:if|whether|example|maybe)\b', re.I)
 _DUTY = re.compile(
-    r"(?<!\w)(?:개발|운영|관리|배포|구축|유지보수)(?:합니다)?(?!\w)|"
+    r"(?<!\w)(?:개발|운영|관리|배포|구축|유지보수)(?:합니다)?(?!\w)|사용\s+업무|"
     r"\b(?:build|develop|maintain|operate|deploy|manage)\b", re.I,
 )
 _EXPERIENCE = re.compile(r"경험|역량|지식|\b(?:experience|knowledge|proficiency)\b", re.I)
@@ -70,6 +72,53 @@ _NON_SKILL_OBLIGATION = re.compile(
 )
 # Commas deliberately end cue scope: do not carry 'Java required' onto 'Python'.
 _SPLIT = re.compile(r"[,;]|(?<=[.!?])\s+")
+
+# This grammar recognizes names from the owned taxonomy, separators and one
+# bounded suffix/prefix only. It cannot swallow arbitrary prose or unknown
+# alternative members. Longer names win without creating a second taxonomy.
+_NAME = "(?:" + "|".join(
+    r"\s+".join(re.escape(part) for part in alias.split())
+    for alias in sorted({a for aliases in SKILL_ALIASES.values() for a in aliases},
+                        key=lambda value: (-len(value), value))
+) + ")"
+_SEPARATOR = r"(?:\s*,\s*|\s+(?:and|or|및|또는|혹은)\s+|\s*[와과/]\s*)"
+_SHARED_LIST = re.compile(
+    rf"(?:must[ -]+have\s+)?(?P<names>{_NAME}(?:{_SEPARATOR}{_NAME})+)"
+    r"\s*(?:중\s*하나(?:\s*이상)?)?\s*"
+    r"(?:(?:사용\s+)?경험(?:자|이|은)?|역량|experience|proficiency)?\s*"
+    r"(?:필수(?:입니다)?|필요합니다|우대(?:합니다)?|required|mandatory|preferred|"
+    r"nice[ -]+to[ -]+have|is\s+(?:a\s+)?plus|"
+    r"(?:is\s+)?not\s+(?:required|necessary|mandatory|preferred|needed)|"
+    r"필수(?:가|는)?\s*(?:아님|아닙니다)|요구하지\s*(?:않음|않습니다)|"
+    r"없어도\s*지원\s*가능(?:합니다)?)?[.!]?",
+    re.I,
+)
+
+
+def _shared_context(text: str, section: RequirementType | None, field: str):
+    """Return (relation, class, rule) only for a complete bounded skill list."""
+    body = text[_DECORATION.match(text).end():]
+    match = _SHARED_LIST.fullmatch(body)
+    if match is None or len(extract_skills(body)) < 2:
+        return None
+    names = match["names"]
+    any_of = bool(_ALTERNATIVE.search(body))
+    # Mixed boolean operators and unqualified slash lists remain ambiguous.
+    # Check connectors between names, not substrings inside canonical names.
+    connectors = re.sub(_NAME, "", names, flags=re.I)
+    has_and = bool(re.search(r"and|및|와|과", connectors, re.I))
+    if (any_of and has_and) or ("/" in connectors and not any_of):
+        return "independent", "unspecified", "unsupported_relation"
+    kind, rule = _classify(body, section, field, shared=True)
+    if rule in {"negated", "ambiguous_context", "conflicting_cues"}:
+        return "independent", "unspecified", rule
+    if any_of:
+        return "any_of", kind, rule
+    # A new all-of group needs an explicit shared cue. Heading/field defaults
+    # keep their existing independent classification contract.
+    if _REQUIRED.search(body) or _PREFERRED.search(body):
+        return "all_of", kind, rule
+    return None
 
 
 def _trim_span(text: str, start: int, end: int) -> tuple[int, int]:
@@ -84,6 +133,14 @@ def _heading(line: str) -> tuple[RequirementType, int] | None:
     """Return section type and content offset for an exact heading/colon label."""
     prefix = _DECORATION.match(line).end()
     body = line[prefix:]
+    # Accept punctuation inside a complete heading wrapper, without changing
+    # the original string used for provenance or accepting decorated prose.
+    wrapped = re.fullmatch(r"(?:\*\*(.+)\*\*|\[(.+)\]|【(.+)】)[:：]?", body)
+    if wrapped:
+        label = next(value for value in wrapped.groups() if value is not None)
+        key = " ".join(label.rstrip(":： ").casefold().split())
+        if key in _HEADINGS:
+            return _HEADINGS[key], len(line)
     parts = re.split(r"([:：])", body, maxsplit=1)
     label, separator = (parts[0], parts[1]) if len(parts) > 1 else (body, "")
     key = label.strip()
@@ -102,7 +159,7 @@ def _heading(line: str) -> tuple[RequirementType, int] | None:
     return None
 
 
-def _classify(text: str, section: RequirementType | None, field: str) -> tuple[RequirementType, str]:
+def _classify(text: str, section: RequirementType | None, field: str, *, shared: bool = False) -> tuple[RequirementType, str]:
     if _NEGATED.search(text):
         return "unspecified", "negated"
     if _UNCERTAIN.search(text):
@@ -112,8 +169,8 @@ def _classify(text: str, section: RequirementType | None, field: str) -> tuple[R
         return "unspecified", "conflicting_cues"
     if (required or section == "required") and _NON_SKILL_OBLIGATION.search(text):
         return "unspecified", "ambiguous_context"
-    if _ALTERNATIVE.search(text) or ((required or preferred) and _CONJUNCTION.search(text)
-                                    and len(extract_skills(text)) > 1):
+    if not shared and (_ALTERNATIVE.search(text) or ((required or preferred) and _CONJUNCTION.search(text)
+                                                   and len(extract_skills(text)) > 1)):
         return "unspecified", "ambiguous_context"
     if required:
         return "required", "explicit_required"
@@ -145,19 +202,28 @@ def _field_evidence(text: str, field: str) -> Iterator[RequirementEvidence]:
             heading, heading_start = line[:content_offset] if content_offset else line, start
             start += content_offset
         # A leading list marker belongs to the source slice; no text rewriting.
+        shared = _shared_context(text[start:end], section, field)
+        # Keep unresolved alternatives intact. Splitting a comma prefix could
+        # otherwise manufacture an independent required/preferred member.
+        unresolved = shared is None and bool(_ALTERNATIVE.search(text[start:end]))
         clause_start = start
-        for boundary in [*_SPLIT.finditer(text, start, end), None]:
+        boundaries = [] if shared or unresolved else list(_SPLIT.finditer(text, start, end))
+        for boundary in [*boundaries, None]:
             clause_end = boundary.start() if boundary else end
             left, right = _trim_span(text, clause_start, clause_end)
             clause_start = boundary.end() if boundary else end
             if left == right:
                 continue
             evidence_text = text[left:right]
-            kind, rule = _classify(evidence_text, section, field)
+            relation = "independent"
+            if shared:
+                relation, kind, rule = shared
+            else:
+                kind, rule = _classify(evidence_text, section, field)
             yield {"source_field": field, "source_index": None, "evidence_text": evidence_text,
                    "evidence_start": left, "evidence_end": right,
                    "section_heading": heading, "section_start": heading_start,
-                   "requirement_type": kind, "rule": rule}
+                   "requirement_type": kind, "rule": rule, "relation": relation}
 
 
 def _conditions(detail: DetailEvidence) -> list[SourceCondition]:
@@ -190,7 +256,7 @@ def extract_requirements(detail: DetailEvidence | None) -> RequirementExtraction
         "source": detail.get("source") if detail is not None else None,
         "posting_id": detail.get("posting_id") if detail is not None else None,
         "detail_fetched_at": detail.get("fetched_at") if detail is not None else None,
-        "quality_status": "detail_not_fetched", "skills": [], "unclassified_evidence": [], "conditions": [],
+        "quality_status": "detail_not_fetched", "skills": [], "groups": [], "unclassified_evidence": [], "conditions": [],
     }
     if detail is None:
         return result
@@ -207,10 +273,16 @@ def extract_requirements(detail: DetailEvidence | None) -> RequirementExtraction
         if keyword.strip():
             evidence.append({"source_field": "keywords", "source_index": index, "evidence_text": keyword,
                              "evidence_start": 0, "evidence_end": len(keyword), "section_heading": None,
-                             "section_start": None, "requirement_type": "unspecified", "rule": "discovery_metadata"})
+                             "section_start": None, "requirement_type": "unspecified", "rule": "discovery_metadata",
+                             "relation": "independent"})
     by_skill: dict[str, SkillRequirement] = {}
     for item in evidence:
         skills = extract_skills(item["evidence_text"])
+        if item["relation"] in {"all_of", "any_of"}:
+            result["groups"].append({"relation": item["relation"], "skills": skills,
+                                     "requirement_type": item["requirement_type"], "evidence": item.copy()})
+        if item["relation"] == "any_of":
+            item = {**item, "requirement_type": "unspecified", "rule": "alternative_member"}
         for skill in skills:
             if skill not in by_skill:
                 by_skill[skill] = {"skill": skill, "requirement_type": "unspecified", "evidence": []}
@@ -227,7 +299,7 @@ def extract_requirements(detail: DetailEvidence | None) -> RequirementExtraction
             raise ValueError(f"{field} must be text or None")
     result["conditions"] = _conditions(detail)
     result["skills"] = [by_skill[skill] for skill in SKILL_ALIASES if skill in by_skill]
-    if any(item["requirement_type"] != "unspecified" for item in result["skills"]):
+    if any(item["requirement_type"] != "unspecified" for item in [*result["skills"], *result["groups"]]):
         result["quality_status"] = "requirements_extracted"
     elif (result["skills"] or result["unclassified_evidence"]
           or any(c["status"] != "missing" for c in result["conditions"])):

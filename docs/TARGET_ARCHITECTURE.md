@@ -1,14 +1,43 @@
 # Target Architecture — 개인용 Job Intelligence
 
-최신 상태: Phase 3B 구조화 요건 추출·데이터 품질을 완료했다(2026-09-17).
+최신 상태: Phase 3C 요건 의미 보강·fixture 평가를 완료했다(2026-09-17).
 Phase 3A 원문 수집·schema v2와 기존 시장 추출·분류·추천·경력 정규화는 유지한다.
-최신 계약은 [데이터 설계](02_data_design.md#phase-3b-구조화-요건과-데이터-품질-계약),
-검증은 [테스트 기준선](TEST_BASELINE.md#phase-3b-검증-2026-09-17)을 따른다. Phase 4 이상은 미시작이다.
+최신 계약은 [데이터 설계](02_data_design.md#phase-3c-요건-의미-보강평가-계약),
+검증은 [테스트 기준선](TEST_BASELINE.md#phase-3c-검증-2026-09-17)을 따른다. Phase 4 이상은 미시작이다.
 아래 이전 단계 기록과 장기 구조는 당시 현황·설계 제안이다.
 
 Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다. Phase 1C 저장 무결성·마이그레이션 계약은 계속 유지한다.
 
+## Phase 3C 실제 구현 경계
+
+순수 추출기는 버전 2다. taxonomy 기반의 제한된 나열 문법으로 all_of/any_of를 구별한다.
+any_of의 필수/우대 의미는 그룹에만 있고 개별 구성원은 unspecified 근거를 받는다.
+독립 근거는 기존 우선순위로 모으되 그룹·약한 근거·반복 위치를 보존한다. 알려지지 않은 대안
+구성원을 삭제한 불완전 그룹이나 중첩 boolean tree를 만들지 않는다. 부정된 나열/제목의 범위,
+Qualifications·wrapper 콜론, 명시적 사용 능력/업무 표현을 보강했다. offsets는 계속 원문 slice다.
+
+```text
+evaluate_requirements.py → committed synthetic/manual corpus
+  → requirement_evaluation.evaluate_requirements
+    → pure extract_requirements → skills + groups + exact provenance + quality
+    → fixture-only class/group TP/FP/FN + precision/recall/F1 + mismatched cases
+    → strict reviewed-label gate (including zero required/preferred false positives)
+```
+
+평가 모듈은 I/O 없는 비교 함수이고 CLI만 fixture 파일을 읽는다. HTTP/SQLite/키가 필요 없다.
+기존 조회 pipeline과 inspect CLI는 버전 2 결과를 그대로 전달한다. 수집 경로에는 추출을
+삽입하지 않았으며 파생 DB/cache도 없다. schema v2·migration·백업·실패 refresh 보존은 그대로다.
+네 품질 상태는 유지하며 분류된 그룹도 requirements_extracted의 근거다.
+
+합성 수동 corpus 60개에서 v1 40/60사례·128/144분류·필수 오탐 3건 → v2 60/60·144/144·
+13/13그룹·필수/우대 오탐 0건이다. 클래스별 수치는 테스트 기준선에 기록했다.
+이는 규칙을 보정한 **fixture 지표이며 실공고 정확도가 아니다**. 실 API smoke는 미실행이다.
+중첩 대안·복잡한 부정/예외·임의 제목·미지원 기술은 여전히 검토가 필요하다.
+시장 분석·직무 분류·학습 추천·경력 정규화·Streamlit은 변경하지 않았다. 프로필/매칭/Phase 4는 없다.
+
 ## Phase 3B 실제 구현 경계
+
+아래는 완료 당시 버전 1 기록이다. 새 그룹과 보강된 의미는 위 Phase 3C 계약을 따른다.
 
 `requirement_extractor.py`가 기존 `extract_skills`/taxonomy를 사용하는 순수 추출 함수다.
 제한된 행·섹션 문맥을 required/preferred/responsibility/unspecified로 분류한다. 원문·위치·섹션·
