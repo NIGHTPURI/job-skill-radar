@@ -105,6 +105,29 @@ class ApplicationBoundaryTest(unittest.TestCase):
             pipeline.collect_work24_to_db("fake-key", ["first", "second"], db_path=self.path, collector=collector)
         self.assertFalse(self.path.exists())
 
+    def test_career_categories_agree_before_and_after_storage_round_trip(self):
+        cases = [(None, "미상"), ("", "미상"), (" \t", "미상"), ("미상", "미상"),
+                 ("신입", "신입"), ("경력", "경력"), ("경력 1년", "경력"), ("경력 3년 이상", "경력"),
+                 ("경력무관", "무관"), ("관계없음", "무관"),
+                 ("신입/경력", "신입/경력"), ("경력 / 신입", "신입/경력"), ("intern", "기타")]
+        collector = Mock(return_value=[
+            {"source": "work24", "posting_id": str(index), "title": "Backend Engineer",
+             "description": "Java SQL", "career": raw}
+            for index, (raw, _) in enumerate(cases)
+        ])
+        direct = pipeline.collect_and_analyze("fake-key", ["backend"], collector=collector)
+        self.assertEqual(direct["career_counts"], {"미상": 4, "신입": 1, "경력": 3,
+                                                  "무관": 2, "신입/경력": 2, "기타": 1})
+        self.assertEqual(pipeline.collect_work24_to_db(
+            "fake-key", ["backend"], db_path=self.path, collector=collector), len(cases))
+        loaded = pipeline.load_db_analysis(db_path=self.path)
+        expected = {("work24", str(index)): career for index, (_, career) in enumerate(cases)}
+        self.assertEqual({(p["source"], p["posting_id"]): p["career"] for p in loaded["postings"]}, expected)
+        for key in ("career_counts", "role_counts", "skill_counts", "role_skill_counts"):
+            self.assertEqual(loaded[key], direct[key])
+        self.assertEqual(loaded["role_counts"], {"백엔드 엔지니어": len(cases)})
+        self.assertEqual(loaded["skill_counts"], {"Java": len(cases), "SQL": len(cases)})
+
 
 if __name__ == "__main__":
     unittest.main()

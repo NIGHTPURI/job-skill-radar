@@ -136,7 +136,8 @@ class PersistenceIntegrityTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
 
     def test_normalized_fields_are_idempotent_including_missing_career(self):
-        for career in (None, "", " ", "미상", "기타", "신입", "경력 3년", "경력무관"):
+        for career in (None, "", " ", "미상", "기타", "신입", "경력", "경력 3년", "경력무관",
+                       "무관", "관계없음", "신입/경력", "경력 / 신입"):
             for region in (None, "", "미상", "서울특별시 강남구", "overseas city"):
                 with self.subTest(career=career, region=region):
                     raw = {"source": " test ", "posting_id": " 1 ", "career": career, "region": region,
@@ -147,7 +148,8 @@ class PersistenceIntegrityTest(unittest.TestCase):
                     self.assertEqual(clean_posting(load_postings(self.conn)[0]), cleaned)
         self.assertEqual(normalize_career(None), "미상")
         self.assertEqual(normalize_career("미상"), "미상")
-        self.assertEqual(normalize_career("경력무관"), "경력")  # Unrelated KD-08 remains.
+        self.assertEqual(normalize_career("경력무관"), "무관")
+        self.assertEqual(normalize_career("신입/경력"), "신입/경력")
 
 
 if __name__ == "__main__":

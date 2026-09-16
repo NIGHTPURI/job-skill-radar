@@ -1,6 +1,6 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 2C 검증](#phase-2c-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
+최신 결과는 문서 끝의 [Phase 2D 검증](#phase-2d-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
@@ -350,3 +350,43 @@ app/recommender/models/demo는 AST 문법 검사를 통과했다. Streamlit과 P
 검증하지 않았다. 의존성 설치·외부 호출·실제 사용자 DB 수정은 하지 않았다.
 추천 결과는 analyzer의 일관된 집계를 전제로 하며 외부 임의 집계의 런타임 유효성 검증은 없다.
 Phase 2C에서 종료하며 Phase 3와 공고별 매칭은 시작하지 않았다.
+
+## Phase 2D 검증 (2026-09-16)
+
+시작 작업 트리는 깨끗했다. 지정 문서 3개와 normalizer/models, 경력 관련 테스트,
+application 경계, Work24 XML·inline fixture를 확인한 뒤 기준선을 실행했다.
+expectedFailure는 KD-08 테스트 하나뿐이었다.
+
+| 검증 | 기준선 | 최종 |
+|---|---|---|
+| 전체 unittest | 222개: 221 통과·예상 실패 1 (0.573초) | 226개 모두 통과 (0.610초) |
+| normalizer | 8개: 7 통과·예상 실패 1 (0.001초) | 11개 모두 통과 |
+| application boundary | 전체 기준선 포함 | 12개 모두 통과 |
+| analyzer / classifier / recommender | 전체 기준선 포함 | 각각 17 / 34 / 24개 모두 통과 |
+| skill extraction | 전체 기준선 포함 | 42개 모두 통과 |
+| migration / persistence integrity | 전체 기준선 포함 | 각각 13 / 15개 모두 통과 |
+| sample CLI | 12건, exit 0 | 동일 출력, exit 0 |
+| git diff --check | exit 0 | exit 0 |
+
+일반 실패·오류는 기준선과 최종 모두 0이며 최종 예상 실패·skip·unexpected success도 0이다.
+검증 명령은 `python -B -m unittest discover -s tests`와 같은 명령의
+`-p test_normalizer.py`, `-p test_application_boundary.py`, `-p test_analyzer.py`,
+`-p test_role_classifier.py`, `-p test_recommender.py`, `-p test_skill_extractor.py`,
+`-p test_migrations.py`, `-p test_persistence_integrity.py`이다.
+CLI는 `python -X utf8 -B scripts/run_demo.py`, 공백 검사는 `git diff --check`로 실행했다.
+
+기존 순서는 결측 → 신입 → 경력 → 무관/관계없음 → 기타였다. 따라서 None/빈 문자열/공백/미상은
+미상, 신입은 신입, 경력·경력 1년·경력 3년 이상은 경력, 경력무관도 경력, 관계없음은 무관,
+신입/경력은 신입이었다. 저장소 XML fixture의 경력·공백과 inline Experienced는 각각
+경력·미상·기타였다. 무관 판정을 먼저 수행하고 혼합 범주를 보존하도록 수정했다.
+
+KD-08 기존 테스트를 그대로 유지하고 expectedFailure를 제거했다. normalizer에 혼합 표현,
+canonical/원문 멱등성, 기존 XML fixture 정제 테스트 3개와 application 경력별 DB 왕복 테스트
+1개를 추가했다. 기존 persistence 멱등성 테스트의 입력을 확대하고 경력무관 기대값을 무관으로
+고쳤다. 무관한 기대값은 변경하지 않았다. 운영 코드 변경은 normalize_career 함수뿐이다.
+
+샘플 직무·기술 집계와 추천 Python → A/B Test → Tableau → Statistics → GA4 및 설명은
+Phase 2C와 동일하다. 실 API·실사용 DB·UI 실행은 이번 검증에 포함하지 않았고 관련 코드를
+변경하지 않았다. 이미 잘못 축약해 저장한 경력 값은 추정 복원하지 않는다.
+canonical 정책은 [데이터 설계](02_data_design.md#phase-2d-경력-정규화-계약)를 따른다.
+Phase 2D에서 종료하며 Work24 상세 수집과 Phase 3는 시작하지 않았다.

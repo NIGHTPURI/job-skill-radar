@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from jobskillradar.normalizer import clean_posting, clean_postings, normalize_career, normalize_region
+from jobskillradar.work24_client import _parse_list_response
 
 
 class NormalizerTest(unittest.TestCase):
@@ -42,17 +43,48 @@ class NormalizerTest(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(normalize_region(raw), expected)
 
-    def test_career_categories_and_current_mixed_precedence(self):
-        for raw, expected in [(None, "미상"), ("", "미상"), ("신입", "신입"),
-                              ("경력 3년", "경력"), ("무관", "무관"), ("관계없음", "무관"),
-                              ("intern", "기타"), ("신입/경력", "신입"), ("경력무관", "경력")]:
+    def test_career_categories_preserve_missing_unrestricted_and_mixed_meanings(self):
+        for raw, expected in [(None, "미상"), ("", "미상"), (" \t\n", "미상"), ("미상", "미상"),
+                              ("신입", "신입"), ("경력", "경력"), ("경력 1년", "경력"),
+                              ("경력 3년", "경력"), ("경력 3년 이상", "경력"),
+                              ("무관", "무관"), ("관계없음", "무관"), ("경력 관계없음", "무관"),
+                              ("경력 무관", "무관"), ("경력무관", "무관"),
+                              ("intern", "기타"), ("Experienced", "기타"), ("기타", "기타"),
+                              ("신입/경력", "신입/경력")]:
             with self.subTest(raw=raw):
                 self.assertEqual(normalize_career(raw), expected)
 
-    @unittest.expectedFailure
     def test_kd08_no_experience_requirement_should_be_unrestricted(self):
-        """KD-08 / Phase 4C: substring priority reverses the meaning of 경력무관."""
+        """KD-08 fixed: unrestricted experience is not experienced-only."""
         self.assertEqual(normalize_career("경력무관"), "무관")
+
+    def test_mixed_career_categories_and_explicit_unrestricted_precedence(self):
+        for raw in ("신입/경력", "경력/신입", " 신입 / 경력 ", "신입·경력", "신입 및 경력"):
+            with self.subTest(raw=raw):
+                self.assertEqual(normalize_career(raw), "신입/경력")
+        for raw in ("신입/경력 무관", "신입 또는 경력 관계없음"):
+            with self.subTest(raw=raw):
+                self.assertEqual(normalize_career(raw), "무관")
+
+    def test_career_normalization_is_idempotent_for_canonical_and_source_values(self):
+        canonical = ("미상", "신입", "경력", "무관", "신입/경력", "기타")
+        for value in canonical:
+            with self.subTest(canonical=value):
+                self.assertEqual(normalize_career(value), value)
+        for raw in (*canonical, None, "", " \t", "경력무관", "관계없음", "경력 1년",
+                    "경력 3년 이상", "경력 / 신입", "신입 및 경력", "intern", "Experienced"):
+            with self.subTest(raw=raw):
+                normalized = normalize_career(raw)
+                self.assertEqual(normalize_career(normalized), normalized)
+                cleaned = clean_posting({"source": "work24", "posting_id": "1", "career": raw})
+                self.assertEqual(cleaned["career"], normalized)
+                self.assertEqual(clean_posting(cleaned), cleaned)
+
+    def test_existing_work24_fixture_careers_survive_normalization(self):
+        fixture = Path(__file__).parent / "fixtures" / "work24" / "list.xml"
+        postings = _parse_list_response(fixture.read_text(encoding="utf-8"))
+        self.assertEqual([posting["career"] for posting in postings], ["경력", ""])
+        self.assertEqual([posting["career"] for posting in clean_postings(postings)], ["경력", "미상"])
 
     def test_dates_and_salary_are_currently_only_trimmed(self):
         result = clean_posting({"registered_at": " 26/9/1 ", "salary": " 협의 "})

@@ -1,6 +1,6 @@
 # Roadmap V2 — 작게 검증하고 계속 사용할 수 있게
 
-상태: Phase 0·1A·1B·1C·2A·2B·2C 완료. **Phase 3는 시작하지 않았다.** 아래 단계별 완료 기록이 과거 제안보다 우선한다.
+상태: Phase 0·1A·1B·1C·2A·2B·2C·2D 완료. **Phase 3는 시작하지 않았다.** 아래 단계별 완료 기록이 과거 제안보다 우선한다.
 근거는 [REFACTORING_AUDIT.md](REFACTORING_AUDIT.md), 목표 경계는 [TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md)에 있다.
 
 ## 공통 완료 조건
@@ -115,6 +115,16 @@
   Streamlit/Plotly 부재로 실제 화면은 미검증이다. KD-08 경력무관 예상 실패는 유지했다.
 - [추천 계약](02_data_design.md#phase-2c-학습-추천-계약)과 [검증 기록](TEST_BASELINE.md#phase-2c-검증-2026-09-16)을 따른다.
   schema/migration/identity/저장·분류·추출 의미를 바꾸지 않았다. 공고별 매칭과 Phase 3는 미시작이다.
+
+## Phase 2D 완료 기록 — Career Normalization Cleanup (2026-09-16)
+
+경력무관을 경력보다 먼저 판정하여 무관으로 정규화하고, 결측은 미상으로 유지한다.
+신입/경력 혼합 표현은 같은 이름의 문자열 범주로 보존한다. 여섯 canonical 값과
+정제·저장 왕복 멱등성을 검증했다. 기존 KD-08 테스트를 정상 회귀 테스트로 전환했다.
+전체 226개 모두 통과·예상 실패 0이며 샘플 CLI 출력은 동일하다.
+운영 변경은 normalize_career뿐이고 저장·migration·추출·분류·추천·UI는 변경하지 않았다.
+[경력 계약](02_data_design.md#phase-2d-경력-정규화-계약)과
+[검증 기록](TEST_BASELINE.md#phase-2d-검증-2026-09-16)을 따른다. Phase 3는 미시작이다.
 
 ## 원래 Phase 2 계획 — 저장 일관성과 수집 관측 기반 (과거 제안)
 
@@ -286,6 +296,6 @@
 
 ## 바로 다음 작업 제안
 
-**Phase 2C는 완료했다.** 추천 신뢰성과 설명 개선에서 종료한다. Phase 3는 시작하지 않았으며 후속 요청에서 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
+**Phase 2D는 완료했다.** 경력 정규화 정리에서 종료한다. Phase 3와 Work24 상세 수집은 시작하지 않았으며 후속 요청에서 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
 
 Phase 1C 저장 무결성, Phase 2A 추출, Phase 2B 분류, Phase 2C 추천 회귀 테스트가 현재 기준선이다. 추천은 학습 후보 순서이며 공고별 적합도가 아니다. 후속 소비자는 제거된 score 키 대신 명시적 근거 계약을 사용해야 한다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.

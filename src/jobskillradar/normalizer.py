@@ -42,15 +42,22 @@ def normalize_region(region: str | None) -> str:
 
 
 def normalize_career(career: str | None) -> str:
+    """Normalize career categories without inferring experience years.
+
+    An explicit lack of restriction takes precedence over category mentions.
+    Keep mixed entry-level/experienced categories distinct from either alone.
+    """
     value = (career or "").strip()
     if not value or value == "미상":
         return "미상"
+    if "무관" in value or "관계없음" in value:
+        return "무관"
+    if "신입" in value and "경력" in value:
+        return "신입/경력"
     if "신입" in value:
         return "신입"
     if "경력" in value:
         return "경력"
-    if "무관" in value or "관계없음" in value:
-        return "무관"
     return "기타"
 
 
