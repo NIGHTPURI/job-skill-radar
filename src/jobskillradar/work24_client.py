@@ -4,6 +4,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
+from .models import JobPosting
+
 
 ENDPOINT = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do"
 
@@ -15,9 +17,9 @@ def _node_text(node: ET.Element, tag: str) -> str:
     return child.text.strip()
 
 
-def _parse_list_response(xml_text: str) -> list[dict]:
+def _parse_list_response(xml_text: str) -> list[JobPosting]:
     root = ET.fromstring(xml_text)
-    postings = []
+    postings: list[JobPosting] = []
     for wanted in root.findall(".//wanted"):
         industry = _node_text(wanted, "indTpNm")
         title = _node_text(wanted, "title")
@@ -54,13 +56,13 @@ def fetch_work24_postings(
     display: int = 100,
     region: str | None = None,
     occupation: str | None = None,
-) -> list[dict]:
+) -> list[JobPosting]:
     if not auth_key:
         raise ValueError("WORK24_AUTH_KEY가 필요합니다.")
 
     display = max(1, min(display, 100))
     pages = max(1, pages)
-    postings = []
+    postings: list[JobPosting] = []
 
     for page in range(1, pages + 1):
         params = {

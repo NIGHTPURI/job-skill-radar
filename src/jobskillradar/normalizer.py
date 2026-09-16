@@ -1,22 +1,13 @@
 from __future__ import annotations
 
 
-REQUIRED_FIELDS = [
-    "source",
-    "posting_id",
-    "company",
-    "title",
-    "description",
-    "region",
-    "career",
-    "education",
-    "salary_type",
-    "salary",
-    "job_code",
-    "registered_at",
-    "closing_at",
-    "url",
-]
+from typing import cast
+
+from .models import JobPosting, POSTING_FIELDS
+
+
+# Compatibility name: these are output fields, not required input keys.
+REQUIRED_FIELDS = list(POSTING_FIELDS)
 
 
 REGION_ALIASES = {
@@ -52,7 +43,7 @@ def normalize_region(region: str | None) -> str:
 
 def normalize_career(career: str | None) -> str:
     value = (career or "").strip()
-    if not value:
+    if not value or value == "미상":
         return "미상"
     if "신입" in value:
         return "신입"
@@ -63,20 +54,21 @@ def normalize_career(career: str | None) -> str:
     return "기타"
 
 
-def clean_posting(posting: dict) -> dict:
+def clean_posting(posting: dict) -> JobPosting:
     cleaned = {field: str(posting.get(field, "") or "").strip() for field in REQUIRED_FIELDS}
     cleaned["region"] = normalize_region(cleaned["region"])
     cleaned["career"] = normalize_career(cleaned["career"])
-    return cleaned
+    return cast(JobPosting, cleaned)
 
 
-def clean_postings(postings: list[dict]) -> list[dict]:
+def clean_postings(postings: list[dict]) -> list[JobPosting]:
     seen = set()
     result = []
     for posting in postings:
         cleaned = clean_posting(posting)
         posting_id = cleaned["posting_id"]
-        if posting_id and posting_id not in seen:
-            seen.add(posting_id)
+        identity = (cleaned["source"], posting_id)
+        if posting_id and identity not in seen:
+            seen.add(identity)
             result.append(cleaned)
     return result

@@ -1,0 +1,191 @@
+# Target Architecture — 개인용 Job Intelligence
+
+상태: Phase 1C 저장 무결성·마이그레이션 완료(2026-09-16). 아래의 Phase 1C 현황이 최신이며 Phase 1B 기록은 당시 구조다. 장기 구조는 설계 제안이다. Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다.
+
+## Phase 1C 실제 구현 현황
+
+- 현재 identity는 **(source, posting_id)** 복합 PK다. 불필요한 surrogate ID는 도입하지 않았다. 정제 중 중복 제거도 같은 복합 키를 사용하며 동일 키는 수집 배치의 첫 행을 유지한다.
+- `migrations.py`가 FK 활성화, user_version=0→1 검사·이전, 신규 schema 생성과 legacy 파일 백업을 담당한다. SQL 리소스 폴더/프레임워크 없이 Python 모듈 하나에 명시적 DDL을 둔다. `storage.ensure_schema` import 경로는 호환 유지한다.
+- `storage.save_postings`는 identity를 검증한 후 전체 입력 배치를 savepoint로 저장한다. 공고 upsert와 해당 identity의 기술 삭제·재추출·삽입은 원자적이다. 직접 저장한 batch 안에서 같은 identity가 반복되면 마지막 값이 남는다.
+- 저장 반환값은 기존 UI/CLI의 의미대로 **신규 identity 수**다. 갱신은 0을 더한다. 선택 필드 누락은 이전 값 유지가 아닌 NULL 교체다. created_at은 최초 값 유지, updated_at은 추가하지 않았다.
+- FK는 `(source, posting_id)`를 참조하고 ON DELETE CASCADE다. 모든 app connection에서 활성화하고 raw sqlite3 connection도 schema 진입 시 확인한다. FK OFF인 활성 transaction은 조용히 commit하지 않고 거절한다.
+- legacy 공고의 14개 필드와 created_at을 그대로 복사한다. 기술은 보존한 title/description에서 현행 extractor로 재구성하여 이전 누적 결함을 제거한다. 본문과 일치하는 기존 기술은 유지되며, orphan/불일치/복원 기술 수를 로그로 보고한다. 파일 백업에는 원래의 모든 행이 남는다.
+- normalize_career의 `미상`만 canonical 값으로 인식하도록 수정했다. `경력무관`의 기존 오분류와 taxonomy/추천/분석 규칙은 변경하지 않았다.
+
+자세한 스키마·백업·실패 정책은 [데이터 설계](02_data_design.md#phase-1c-현재-영속-계약)를 따른다. storage 내부의 기술 추출은 같은 저장 표현에서 파생값을 만드는 실제 무결성 경계로 유지했다. 외부 raw SQL로 본문만 수정하는 작업까지 기술 일치를 보장하는 DB trigger는 없으므로 정상 공고 쓰기는 save_postings를 사용해야 한다. 외부 도구가 FK를 끄면 DB 제약도 우회할 수 있다.
+
+## Phase 1B 구현 기록 (당시 기준)
+
+새 디렉터리·서비스 클래스 없이 `models.py`만 추가했다. `JobPosting`과 `AnalysisResult`는 표준 라이브러리 TypedDict다. 현재 API가 부분 dict, None, 추가 필드를 허용하므로 dataclass로 일괄 변환하기보다 런타임 dict를 유지하는 최소 계약을 택했다. 타입 선언은 입력 검증이나 강제 변환이 아니다. 전체 프로젝트의 정적 타입 검사를 완료했다는 의미도 아니다.
+
+### 확인한 공고 계약
+
+| 구분 | 현재 필드·의미 |
+|---|---|
+| 기본 14개 | source, posting_id, company, title, description, region, career, education, salary_type, salary, job_code, registered_at, closing_at, url |
+| 필수 입력 | 모든 함수에 공통인 필수 키는 없음. clean_posting은 {}도 받지만 clean_postings는 빈 ID를 제외. Work24 parser는 14개 키를 모두 생성하며 값은 빈 문자열일 수 있음 |
+| persistence 제약 | posting_id는 기존 PK, source/created_at은 NOT NULL. source나 ID에 새 검증을 추가하지 않음. 직접 storage 호출의 NULL·오류·orphan 동작 보존 |
+| 선택·결측 | storage의 누락 기본 필드는 None으로 조회될 수 있음. 정제는 문자열로 바꾸지만 analyzer 직접 호출은 키 부재와 None을 구별함 |
+| 생성 필드 | analyzer가 skills:list[str], role:str을 추가/덮어씀. 추가 사용자 필드는 analyzer가 유지하지만 normalizer는 제거 |
+| storage 전용 | created_at은 저장 시 생성하고 기존 조회 결과에는 포함하지 않음. 모델에 추가하지 않음 |
+| UI 전용 | source_label, mode, Counter의 차트 열 이름, 쉼표로 연결한 skills 표시값. 영속 공고 계약에 포함하지 않음 |
+
+`POSTING_FIELDS`는 모델의 기본 필드 선언 순서에서 유도한다. normalizer의 기존 REQUIRED_FIELDS와 storage 조회 매핑이 이를 공유한다. SQL SELECT/INSERT는 읽기 쉬운 명시적 SQL로 유지하고 DDL·save 본문은 변경하지 않았다. 모델의 기본 필드 순서를 변경한다면 SQL 열 순서와 계약 테스트를 함께 검토해야 한다.
+
+`AnalysisResult`는 기존 postings와 skill_counts/role_counts/career_counts/region_counts/role_skill_counts를 이름과 타입으로 명시한다. 분모·프로필·매칭·새로운 분석 정보는 넣지 않았다. recommendation은 기존 partial dict 입력 및 점수 계산을 그대로 사용한다.
+
+### 구현된 경계
+
+```text
+app.load_analysis (Streamlit cache, 기존 ttl=60)
+  → pipeline.load_analysis (DB 우선 / 빈 DB 샘플 / 샘플 전용 정책)
+    → pipeline.load_db_analysis → storage.load_postings_from_db
+    → pipeline.analyze_sample
+
+pipeline.collect_work24_to_db / collect_and_analyze
+  → pipeline.collect_postings (키워드 루프 → 기존 정제·중복 제거)
+    → collector callable (기본 Work24 HTTP/XML client)
+  → storage.save_postings_to_db 또는 순수 analyzer
+```
+
+- storage의 두 path 함수가 연결 생성·종료를 소유한다. 기존 conn 기반 함수도 유지한다. contextlib.closing은 연결을 닫으며 새로운 transaction 정책을 도입하지 않는다. 읽기 시 schema 생성, save commit, 기술 재추출과 중복 불일치도 기존대로다.
+- pipeline의 DB 함수는 keyword-only `db_path`를 선택적으로 받는다. 생략 시 기존 config를 호출하고, 제공하면 사용자 환경을 읽지 않는다.
+- 수집 함수는 keyword-only `collector` callable을 선택적으로 받는다. 서비스 클래스·provider 계층 없이 실제 HTTP를 대체할 수 있다. 각 callable은 auth_key/keyword/pages/display 키워드를 받는다. 분석 전용 경로의 display=100도 이제 명시적으로 전달하며 기본 HTTP 요청값은 동일하다.
+- 모든 키워드 수집이 성공한 뒤 정제·저장한다. 중간 실패 시 저장하지 않는 기존 정책과 첫 ID 우선 중복 처리도 그대로다.
+- app에는 cached wrapper만 남겼다. 차트·입력·메시지·캐시 TTL/clear 방식은 바꾸지 않았다. 오류가 나면 샘플로 자동 전환하는 새 동작도 넣지 않았다.
+- analyzer는 I/O 없이 기존 계산을 유지하고 Work24 client는 HTTP/XML과 필드 매핑만 소유한다. recommender와 taxonomy는 수정하지 않았다.
+
+검증: 112개(107 통과, 기존 예상 실패 5), 샘플 12건·추천 순서 유지. 자세한 결과는 [테스트 기준선의 Phase 1B 기록](TEST_BASELINE.md#phase-1b-검증-추가-2026-09-16)을 참고한다. 아래 장기 모델·디렉터리 중 migrations, role_classifier, matcher, taxonomy 파일 등은 아직 구현하지 않았다.
+
+## 1. 설계 목표와 유지할 기반
+
+한 사람이 로컬에서 공고를 모으고, 자신의 조건과 비교하며, 지원 과정을 기록하는 도구가 목표다. SQLite와 Streamlit을 유지한다. 현재 `pipeline.py`를 application 경계로 발전시키고 필요한 순수 함수·모델만 추가한다. 웹 서버, 인증 시스템, 범용 repository 계층, DI container는 현재 요구가 아니다.
+
+UI는 입력·표시·화면 캐시를 맡고 application은 작업 순서·트랜잭션·오류 결과를 맡는다. domain은 기술·직무·요건·비교 계산을 담당한다. 외부 응답 구조는 collector 안에서 변환하며 SQLite의 행 구조는 storage 밖으로 퍼뜨리지 않는다. 분석과 개인 매칭은 서로 다른 결과와 용어를 쓴다.
+
+## 2. 점진적 목표 디렉터리
+
+다음은 최종적으로 필요한 파일의 후보이며 한 번에 scaffold하지 않는다. `domain/`, `services/`, `repositories/`라는 빈 디렉터리를 추가하지 않고 기존 평면 패키지를 유지한다.
+
+```text
+app.py                              Streamlit 구성·입력·표시·캐시
+src/jobskillradar/
+  config.py                         환경과 로컬 경로
+  models.py                         실제 사용하는 dataclass/result 계약
+  pipeline.py                       기존 application 진입점 및 작업 조합
+  normalizer.py                     손실 없는 원본+정규화 정책
+  skill_extractor.py                alias 매칭 및 evidence
+  role_classifier.py                역할 규칙·근거·Unknown
+  requirement_extractor.py           본문 섹션·필수/우대/미구분 추출
+  analyzer.py                       공고 집계·분모·출처·기간
+  recommender.py                    학습 우선순위와 계산 근거
+  matcher.py                        프로필 대 공고 비교 순수 함수
+  storage.py                        SQLite CRUD·트랜잭션 helper
+  migrations.py                     스키마 버전·순차 migration 실행
+  work24_client.py                  목록·검증된 상세 API adapter
+  sample_data.py                    명시적 demo fixture
+  taxonomy/
+    skills.json                    canonical ID·alias·버전
+    roles.json                     role ID·표시명·제목 alias
+  migrations/
+    001_*.sql                      첫 영속 스키마 변경 때 도입
+scripts/                            기존 실행·수집·샘플 스크립트 유지
+tests/
+  test_*.py                        기존 unittest 구조 유지
+  fixtures/work24/                 합성 또는 비식별 XML fixture
+docs/                              계약·실행·계산 기준
+data/                              로컬 DB 및 필요한 원문, Git 제외
+```
+
+새 디렉터리의 이유:
+
+- `taxonomy/`: 엔지니어링 직군 확장 시 검색 지식과 Python 알고리즘을 분리하고 검증·버전 관리를 쉽게 한다. JSON을 사용해 YAML 의존성을 추가하지 않는다.
+- `migrations/`: 최초 스키마 변경부터 기존 사용자 데이터를 지키는 순차 SQL이 필요하다. runner와 같은 stem을 사용하더라도 이 폴더는 import 패키지가 아닌 SQL 리소스 폴더로 취급한다.
+- `tests/fixtures/work24/`: 네트워크 없이 실제 parser의 성공·오류·결측 계약을 테스트하기 위한 데이터다. 비밀과 개인 정보는 넣지 않는다.
+- `data/`: 이미 config에 존재하는 로컬 실행 경로다. 서비스 계층이나 별도 데이터 플랫폼이 아니다.
+
+새 파일의 이유:
+
+- `models.py`: 지금 여러 dict에 복제된 필드·결측 의미를 통일한다. 모든 미래 모델을 선제 구현하지 않는다.
+- `role_classifier.py`: taxonomy 확장 때 analyzer의 집계와 분류 규칙을 독립 검증할 수 있도록 한다.
+- `requirement_extractor.py`: 기술 언급과 실제 필수·우대 요건은 다른 개념이므로 섹션 근거를 별도로 다룬다.
+- `matcher.py`: 기존 시장 빈도 추천과 공고별 비교를 혼동하지 않게 한다.
+- `migrations.py`: 현재 CREATE IF NOT EXISTS만으로는 기존 DB 구조를 안전하게 변경할 수 없다.
+
+UI가 커져야 `ui/` 또는 Streamlit pages를 추가한다. 다른 실제 공급자가 생기기 전에는 collector interface hierarchy를 만들지 않는다. storage가 기능별로 커지는 시점에만 파일을 분리한다.
+
+## 3. 의존성과 실행 흐름
+
+```text
+Streamlit / CLI
+       ↓
+pipeline (application)
+   ├─ Work24 client → raw/list/detail 결과
+   ├─ normalizer + extractor + classifier → domain 모델
+   ├─ SQLite storage → 영속 공고·프로필·관측 기록
+   └─ analyzer / matcher / recommender → 설명 가능한 결과
+       ↓
+UI 표시 모델·CLI 출력
+```
+
+domain 함수는 Streamlit·네트워크·SQLite를 import하지 않는다. 모델도 UI와 DB를 모른다. storage는 이미 계산된 기술·요건을 저장하며 extractor를 직접 실행하지 않는다. application은 명시적 DB 경로와 collector callable을 받을 수 있게 하는 정도로 테스트 경계를 만든다. 기존 CLI가 호출하는 함수는 호환 wrapper로 유지할 수 있다.
+
+공고 입력은 두 경로다.
+
+1. 수동 등록: 제목·회사·URL·본문·선택 메타데이터 입력 → application validation → 정규화·추출 → 공고 및 snapshot 저장.
+2. Work24: 목록 수집 → 식별·변경 판단 → 검증된 detail 요청 → source DTO 변환 → 동일한 application 경로.
+
+상세 실패 시 목록 공고를 버리는 대신 `list_only`/`detail_failed` 상태와 이유를 남기는 것이 목표다. 전체 성공을 가장하지 않고 수집/저장/갱신/중복/실패 수를 구분한다. 정책 확정 전 현재 반환 int를 조용히 다른 의미로 바꾸지 않는다.
+
+## 4. 필요한 모델과 계약
+
+| 모델 | 핵심 필드·규칙 | 도입 시점 |
+|---|---|---|
+| JobPosting | source/posting_id 복합 identity, title/company/url, 향후 원문·정규화 metadata·detail status | 현재 계약 유지, 추가 정보는 해당 기능 단계 |
+| AnalysisResult | postings, counts, denominator, source scope, 기간·품질 요약 | 초기에는 기존 결과와 동등한 필드부터 |
+| Skill / Role | stable ID, display name, aliases, version | taxonomy 확장 |
+| SkillEvidence | skill ID, 원문 구간, 추출 rule/version | 본문 추출 |
+| JobRequirement | kind(required/preferred/unspecified), skill/비기술 요건, 원문·섹션·추출 상태 | 본문 추출 |
+| UserProfile / UserSkill | local profile ID, skills, target role IDs, 선호·제약, revision | 개인화 |
+| JobMatchResult | matched/missing/unknown, 제약 평가, 계산 항목·분모·버전·근거 | 매칭 |
+| SavedJob / Application | profile/posting, saved time, stage, notes, stage history | 추적 |
+| SkillDemandSnapshot | period/scope/role/skill, 공고 분자·분모, observation/taxonomy version | 반복 관측 분석 |
+
+단순 dataclass와 Enum/Literal로 시작한다. API 원본 dict는 collector 내부에 한정할 수 있다. 결측, 확인된 없음, 미수집, 추출 실패를 같은 빈 문자열로 표현하지 않는다. 원문과 정규화 값을 함께 남겨 잘못된 규칙을 나중에 재처리할 수 있게 한다.
+
+## 5. 영속 설계와 이관
+
+첫 변경 전에 기존 DB 백업·버전 식별·복원 테스트를 마련한다. migration은 transaction 단위로 실행하고 실패 시 기존 DB를 사용할 수 있어야 한다. 초기 sample/실데이터 혼재는 source로 분리하고 삭제하지 않는다.
+
+- 공고: 현재 복합 PK(source, posting_id)를 유지한다. 향후 수동 공고는 `manual` source와 충돌 없는 ID를 사용한다. URL만으로 다른 공고를 무조건 합치지 않는다.
+- 관측: collection_runs는 시작/종료/키워드/페이지/성공·실패 범위를 보존한다. posting snapshot은 내용 hash·관측 시각·출처·원문·정규화 결과를 연결한다. 같은 내용 재수집과 내용 변경을 구별한다.
+- 최신 공고와 추출 결과: 한 transaction에서 같은 snapshot/version을 기준으로 갱신한다. 이전 기술을 무조건 누적하지 않는다. 기존 posting_skills를 유지할지 snapshot FK로 옮길지는 migration 설계에서 정한다.
+- timestamps: published_at과 observed_at을 구분하고 관측 시각은 timezone이 명확한 UTC로 보존한다. 원본 날짜가 해석 불가하면 원문과 parse 상태를 남긴다.
+- profile, user_skills, target_roles는 단일 사용자부터 시작한다. 계정·로그인 구조는 만들지 않는다.
+- saved_jobs, applications 및 notes/stage history는 posting을 참조한다. UI 단계 전환은 이력과 함께 atomic하게 저장한다.
+- 매칭은 처음에는 필요할 때 계산해도 된다. 저장할 때는 profile revision + posting snapshot + rule/taxonomy version을 함께 저장하여 오래된 결과를 식별한다.
+- skill demand는 snapshot/run 자료로 SQL 집계부터 시작한다. 전용 요약 테이블은 실제 비용 문제가 생겼을 때만 도입한다.
+
+FK와 필요한 UNIQUE를 명시하고 각 연결에서 FK enforcement를 설정한다. 조회에 필요한 인덱스는 실제 필터·정렬 패턴에 맞춰 추가한다. 범용 ORM 도입은 필수 조건이 아니다.
+
+## 6. 규칙과 설명 가능성
+
+직무는 최소 Backend, Frontend, Full-stack, Data Analyst, Data Engineer, ML/AI, DevOps/Cloud, Unknown을 지원한다. 기존 BI 값은 명시적 호환 정책을 둔다. 제목·본문 근거와 모호성을 반환한다. 단일 인프라 기술로 데이터 엔지니어를 확정하지 않는다.
+
+backend taxonomy는 Java, Spring, Spring Boot, Spring MVC, Spring Security, JPA, Hibernate, QueryDSL, Gradle, Maven, MySQL, PostgreSQL, Redis, Kafka, Docker, Kubernetes, AWS, Linux, REST API, JWT, Git, CI/CD를 포함한다. 기존 데이터·AI 기술은 유지한다. alias와 관계는 테스트로 검증하며 하위 기술 보유가 상위 기술 충족을 뜻하는지는 별도 공개 규칙이다.
+
+매칭은 합격 확률이 아니다. 먼저 필수/우대별 일치·미보유·판단불가 목록과 career/location 등 제약을 보여준다. 숫자는 요건 근거가 충분할 때만 제공한다. 확인되지 않은 요건을 미충족으로 처리하지 않는다. 점수가 도입되면 공식·분모·각 항목 기여·제외 항목·정책 버전을 모두 결과에 포함한다. 정확한 weight는 Phase 0에서 임의로 정하지 않고 수동 검토 공고 fixture와 사용 목적을 바탕으로 해당 Phase에서 승인 가능한 형태로 확정한다.
+
+학습 추천은 기존 빈도+기초 가산 결과를 legacy 동작으로 구별한다. 이후 사용자의 실제 목표 공고 gap과 비교 가능한 시장 수요를 함께 사용하되, 원래 빈도·공고 분모·관측 기간·기초 가산 같은 근거를 각각 노출한다. 성장 데이터가 없으면 현재 빈도만 있다고 표시한다.
+
+## 7. UI와 운영 원칙
+
+샘플/실제/혼합 출처와 목록만/상세 확보 상태를 명확히 표시한다. API 실패가 기존 로컬 공고 열람까지 막지 않게 한다. 수집 실패, 빈 결과, 상세 누락을 서로 다른 상태로 표시한다. API 키가 없는 경우에도 수동 등록과 프로필·지원 추적을 사용할 수 있어야 한다.
+
+캐시는 UI에서 관리하되 DB identity/revision, 필터, rule version을 반영한다. 저장 성공 후 관련 결과만 무효화하는 방향으로 개선한다. 키·개인 프로필·본문을 로그에 무조건 남기지 않는다. local backup/export를 우선하고 클라우드 배포는 실제 필요가 있을 때 별도 검증한다.
+
+## 8. 검증 기준과 미해결 사항
+
+각 경계는 순수 unit test, 임시 SQLite integration, 합성 XML/HTTP mock, 소수 UI smoke test로 검증한다. 실제 API test는 명시적 opt-in으로 분리해 기본 테스트가 키·네트워크 없이 돌아가야 한다.
+
+남은 결정: Work24 상세 계약·접근 권한, 본문 섹션 언어·형식, 실제 사용할 지원 단계, 프로필 숙련도 정의, 역할 중복 처리, 공고 갱신과 source ID 이관 정책, 점수 가중치, 관측 비교 기간. 이는 검증할 설계 질문이며 현재 동작에 대한 사실이 아니다. 규모가 커졌다는 증거 없이 프레임워크나 DB를 교체하지 않는다.

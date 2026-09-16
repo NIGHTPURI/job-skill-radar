@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic list fixture; not a captured response or a detail API contract. -->
+<wantedRoot>
+  <wanted>
+    <wantedAuthNo> TEST-001 </wantedAuthNo>
+    <company> 테스트 회사 </company>
+    <title> Python 분석 담당 </title>
+    <indTpNm> 정보서비스업 </indTpNm>
+    <region> 서울 강남구 </region>
+    <career> 경력 </career>
+    <minEdubg>대졸</minEdubg><maxEdubg>박사</maxEdubg>
+    <salTpNm>연봉</salTpNm><sal>4000만원</sal>
+    <jobsCd>134</jobsCd><regDt>2026-09-01</regDt><closeDt>2026-09-30</closeDt>
+    <wantedInfoUrl>https://example.com/jobs/1?a=1&amp;b=2</wantedInfoUrl>
+  </wanted>
+  <wanted>
+    <wantedAuthNo>TEST-002</wantedAuthNo><company/>
+    <title> SQL 담당 </title><career> </career>
+    <maxEdubg>학력무관</maxEdubg>
+  </wanted>
+</wantedRoot>

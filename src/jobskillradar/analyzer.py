@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from .models import AnalysisResult, JobPosting
 from .skill_extractor import extract_skills
 
 
@@ -54,7 +55,7 @@ def classify_role(posting: dict, skills: list[str]) -> str:
     return "데이터 분석가"
 
 
-def enrich_posting(posting: dict) -> dict:
+def enrich_posting(posting: dict) -> JobPosting:
     skills = extract_skills(posting.get("title"), posting.get("description"))
     role = classify_role(posting, skills)
     return {
@@ -64,7 +65,7 @@ def enrich_posting(posting: dict) -> dict:
     }
 
 
-def analyze_postings(postings: list[dict]) -> dict:
+def analyze_postings(postings: list[dict]) -> AnalysisResult:
     enriched = [enrich_posting(posting) for posting in postings]
 
     skill_counts = Counter()

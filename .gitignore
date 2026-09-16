@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 
 data/*.sqlite
+data/*.pre-v1-*.bak
 work/
 outputs/
 

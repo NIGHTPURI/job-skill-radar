@@ -13,7 +13,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from jobskillradar.analyzer import ROLE_LABELS
 from jobskillradar.config import get_db_path, get_work24_auth_key
-from jobskillradar.pipeline import analyze_sample, collect_work24_to_db, load_db_analysis, seed_sample_db
+from jobskillradar.models import AnalysisResult
+from jobskillradar.pipeline import collect_work24_to_db, load_analysis as select_analysis, seed_sample_db
 from jobskillradar.recommender import recommend_skills
 
 
@@ -26,12 +27,8 @@ def counter_frame(counter: Counter, name_col: str, value_col: str, limit: int | 
 
 
 @st.cache_data(ttl=60)
-def load_analysis(mode: str) -> tuple[dict, str]:
-    if mode == "DB 우선":
-        db_analysis = load_db_analysis()
-        if db_analysis:
-            return db_analysis, "DB"
-    return analyze_sample(), "샘플"
+def load_analysis(mode: str) -> tuple[AnalysisResult, str]:
+    return select_analysis(mode)
 
 
 st.title("Job Skill Radar")
