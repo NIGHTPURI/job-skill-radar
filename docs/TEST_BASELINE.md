@@ -1,5 +1,7 @@
 # Phase 1A — Regression Test Baseline
 
+최신 결과는 문서 끝의 [Phase 1C 재개 검증](#phase-1c-재개-검증-2026-09-16)을 따른다. 앞의 Phase 1A/1B 수치와 결함 설명은 당시 기록이다.
+
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
 Phase 0 문서 3개와 실제 구현을 다시 읽고 작업했다. 운영 코드·스키마·taxonomy·의존성은 수정하지 않았다. Phase 1B/2 작업은 시작하지 않았다.
@@ -147,3 +149,47 @@ Phase 1B 결과는 **112개: 107 통과, expected failures 5, 일반 실패 0, e
 - 모델은 TypedDict이며 런타임 검증·결측 보충을 추가하지 않는다. 전면 정적 타입 검사는 수행하지 않았다.
 
 Phase 1B 완료 뒤 Phase 1C 및 Phase 2는 시작하지 않았다.
+
+## Phase 1C 재개 검증 (2026-09-16)
+
+시작 브랜치는 `refactor/v2`, HEAD는 `985d7e0` (`wip: implement phase 1c persistence integrity`)이며 작업 트리는 깨끗했다. Git 이력에는 Phase 1A/1B/1C가 별도 커밋으로 나뉘어 있지 않으므로, 기존 문서와 실제 코드·테스트를 대조했다. 요청된 17개 요구사항은 이미 구현되어 있었고 이번 재개 세션에서는 운영 코드와 테스트를 변경하지 않았다. 로드맵의 미시작 표시와 이 검증 기록만 보완했다.
+
+### 실행 결과
+
+프로젝트 루트에서 다음 명령을 초기 검증과 최종 검증에 각각 실행했다. 두 실행의 결과는 같다. 각 명령의 종료 코드는 0이다.
+
+| 명령 | 결과 |
+|---|---|
+| `python -B -m unittest discover -s tests -v` | 140개: 136 통과, expected failures 4, failures 0, errors 0, skipped 0, unexpected successes 0 |
+| `python -B -m unittest discover -s tests -p test_migrations.py -v` | 13개 모두 통과 |
+| `python -B -m unittest discover -s tests -p test_persistence_integrity.py -v` | 15개 모두 통과 |
+| `python -X utf8 -B scripts/run_demo.py` | 12건 분석, 정상 종료 |
+| `git diff --check` | 출력 없음, 공백 오류 없음 |
+
+초기 실행 시간은 전체 0.410초, migration 0.087초, integrity 0.017초였다. 시간은 환경과 실행마다 달라진다. CLI는 출력 인코딩을 명시했다. 샘플 직무 분포는 데이터 분석가 6 / ML 엔지니어 3 / 데이터 엔지니어 2 / BI 분석가 1, 추천은 Python 9, Statistics 4, Tableau 3, Pandas 3, A/B Test 2로 기존과 같다.
+
+### 요구사항별 확인 근거
+
+| 요구사항 | 구현 및 회귀 검증 |
+|---|---|
+| 1–2. 복합 DB identity·source 충돌 방지 | 두 테이블의 복합 PK 검사, 서로 다른 source의 동일 external ID 저장·개별 기술 갱신 테스트 |
+| 3–4. 오래된 기술 교체·원자적 저장 | 전체 표현 upsert와 기술 집합 교체, 빈 기술 집합, child INSERT 강제 실패 시 신규·기존 공고와 기술 전체 rollback |
+| 5. 잘못된 identity의 부분 저장 방지 | 전체 배치 사전 검증, 누락/None/공백/비문자열 거절, DB NOT NULL/CHECK |
+| 6–7. FK 활성화·orphan 방지 | application connection 및 schema 진입 시 FK ON 확인, 잘못된 부모/source 거절, source별 CASCADE |
+| 8–10. v0→v1 이전·초기화 방지·사전 백업 | legacy fixture의 모든 공고 필드 보존, 알 수 없는 version/layout/custom object 거절, 파일 백업의 원본 dump 및 v0 확인, 백업 실패 시 이전 중단 |
+| 11. migration 실패 rollback | copy/rename 후 주입한 실패에서 schema/data/user_version 원복 확인 |
+| 12–13. 멱등성·재연결 | 반복 ensure_schema에서 dump 불변, 파일 재연결·갱신, 추가 백업 없음, 백업 복사본 재이전 |
+| 14. 기존 orphan 처리 | 부모 없는 기술은 새 테이블에서 제외하고 건수 기록. 본문 불일치 기술 제거·누락 기술 복원, 원본은 파일 백업에 보존 |
+| 15. created_at 보존 | 최초 저장 시각의 기존 형식 유지, 갱신과 migration에서 원래 값 보존 |
+| 16. 결측 경력 멱등성 | `미상` 반복 정제와 DB 왕복 유지, application 직접/DB 경력 집계 일치 |
+| 17. 무관한 동작 보존 | 기존 taxonomy/recommender는 최초 커밋과 동일. analyzer 변경은 모델 import와 타입 표기뿐이며 분류·집계 회귀 테스트 및 샘플 기준선 유지 |
+
+저장 배치는 SAVEPOINT로 묶으며 caller transaction이 있으면 최종 commit/rollback 권한을 유지한다. migration은 저장 배치보다 먼저 별도 transaction으로 완료한다. 세부 정책은 [데이터 설계](02_data_design.md#phase-1c-현재-영속-계약)를 따른다.
+
+### 결함 상태와 검증 한계
+
+KD-06(본문/기술 불일치), KD-07(source 충돌), KD-10(orphan), KD-11(결측 경력 재정제)은 해결되었다. KD-06 테스트는 일반 통과 테스트로 전환되어 예상 실패가 5개에서 4개로 줄었다.
+
+남은 expected failure는 KD-01(`Python.` 누락), KD-02(`R&D`의 R 오탐), KD-05(limit=0 추천 반환), KD-08(`경력무관` 오분류)이다. KD-03(한글 부분 문자열 오탐), KD-04(직무 부분 문자열 오분류), KD-09(오류 XML과 빈 결과 혼동)도 기존 결함 재현 테스트로 남는다. Phase 1C 범위 밖이므로 수정하지 않았다.
+
+이번 검증은 메모리/임시 SQLite와 mock 기반이다. 실제 사용자 DB 이전, Streamlit UI, 실 Work24 API, 동시 writer·디스크 장애·강제 프로세스 종료 복구는 검증하지 않았다. 최초 legacy 이전은 다른 writer를 중지하고 백업 경로 권한·공간을 확인해야 한다. 이미 손실된 다른 source 공고나 `기타`로 바뀐 결측 경력의 원래 값은 추정 복원하지 않는다. Phase 2는 시작하지 않았다.
