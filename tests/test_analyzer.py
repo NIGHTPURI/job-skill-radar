@@ -11,7 +11,9 @@ from jobskillradar.analyzer import ROLE_LABELS, analyze_postings, classify_role,
 
 class RoleClassificationTest(unittest.TestCase):
     def test_existing_labels(self):
-        self.assertEqual(ROLE_LABELS, ["데이터 분석가", "데이터 엔지니어", "ML 엔지니어", "BI 분석가"])
+        self.assertEqual(ROLE_LABELS, ["데이터 분석가", "데이터 엔지니어", "ML 엔지니어", "BI 분석가",
+                                       "백엔드 엔지니어", "프론트엔드 엔지니어", "풀스택 엔지니어",
+                                       "DevOps / 클라우드 엔지니어", "미분류 / 기타"])
 
     def test_title_rules_for_all_roles(self):
         for title, role in [("데이터 분석 담당", "데이터 분석가"),
@@ -28,13 +30,13 @@ class RoleClassificationTest(unittest.TestCase):
                 self.assertEqual(classify_role({"title": "specialist", "description": description}, []), role)
 
     def test_skill_rules(self):
-        groups = [("데이터 엔지니어", ["Spark", "Airflow", "Kafka", "Docker", "Kubernetes"]),
-                  ("ML 엔지니어", ["Machine Learning", "Deep Learning", "NLP", "PyTorch", "TensorFlow"]),
-                  ("BI 분석가", ["Tableau", "Power BI", "Looker"])]
+        groups = [("데이터 엔지니어", [["Spark", "SQL"], ["Airflow", "Kafka"]]),
+                  ("ML 엔지니어", [["Machine Learning", "PyTorch"], ["Python", "TensorFlow"]]),
+                  ("BI 분석가", [["Tableau", "SQL"], ["Power BI", "Excel"], ["Looker", "SQL"]])]
         for role, skills in groups:
-            for skill in skills:
-                with self.subTest(skill=skill):
-                    self.assertEqual(classify_role({}, [skill]), role)
+            for cluster in skills:
+                with self.subTest(cluster=cluster):
+                    self.assertEqual(classify_role({}, cluster), role)
 
     def test_bi_title_precedes_analyst_and_ml(self):
         self.assertEqual(classify_role({"title": "BI 데이터 분석가", "description": "머신러닝"},
@@ -44,26 +46,55 @@ class RoleClassificationTest(unittest.TestCase):
         self.assertEqual(classify_role({"title": "데이터 분석가", "description": "파이프라인"},
                                        ["PyTorch", "Docker"]), "데이터 분석가")
 
-    def test_engineering_branch_with_ml_skill_becomes_ml(self):
-        self.assertEqual(classify_role({"title": "플랫폼 엔지니어"}, ["PyTorch"]), "ML 엔지니어")
+    def test_platform_title_is_not_overridden_by_incidental_ml_skill(self):
+        self.assertEqual(classify_role({"title": "플랫폼 엔지니어"}, ["PyTorch"]), "DevOps / 클라우드 엔지니어")
 
-    def test_current_engineering_text_precedes_ml_text_without_ml_skill(self):
+    def test_generic_platform_and_ai_mentions_are_insufficient(self):
         # classify_role consumes supplied skills; it does not extract them itself.
-        self.assertEqual(classify_role({"description": "플랫폼 AI"}, []), "데이터 엔지니어")
+        self.assertEqual(classify_role({"description": "플랫폼 AI"}, []), "미분류 / 기타")
 
-    def test_default_and_unsupported_english_roles(self):
-        for title in ("", "specialist", "Backend Engineer", "Frontend Developer", "DevOps Engineer"):
+    def test_unknown_fallback_and_supported_english_roles(self):
+        for title, role in [("", "미분류 / 기타"), ("specialist", "미분류 / 기타"),
+                            ("Backend Engineer", "백엔드 엔지니어"), ("Frontend Developer", "프론트엔드 엔지니어"),
+                            ("DevOps Engineer", "DevOps / 클라우드 엔지니어")]:
             with self.subTest(title=title):
-                self.assertEqual(classify_role({"title": title}, []), "데이터 분석가")
+                self.assertEqual(classify_role({"title": title}, []), role)
 
-    def test_current_known_defect_substrings_misclassify_unrelated_titles(self):
-        """KD-04 / Phase 3: these are observations, not desired role labels."""
-        self.assertEqual(classify_role({"title": "mobile developer"}, []), "BI 분석가")
-        self.assertEqual(classify_role({"title": "retail assistant"}, []), "ML 엔지니어")
-        self.assertEqual(classify_role({"title": "백엔드 엔지니어"}, []), "데이터 엔지니어")
+    def test_kd04_substrings_no_longer_misclassify_unrelated_titles(self):
+        """KD-04 fixed: bounded phrases and explicit backend support."""
+        self.assertEqual(classify_role({"title": "mobile developer"}, []), "미분류 / 기타")
+        self.assertEqual(classify_role({"title": "retail assistant"}, []), "미분류 / 기타")
+        self.assertEqual(classify_role({"title": "백엔드 엔지니어"}, []), "백엔드 엔지니어")
 
 
 class AnalyzerTest(unittest.TestCase):
+    def test_all_nine_roles_aggregate_with_deterministic_skill_counts(self):
+        cases = [
+            ("Backend Engineer", "백엔드 엔지니어"), ("Frontend Engineer", "프론트엔드 엔지니어"),
+            ("Full-stack Engineer", "풀스택 엔지니어"), ("Data Analyst", "데이터 분석가"),
+            ("BI Analyst", "BI 분석가"), ("Data Engineer", "데이터 엔지니어"),
+            ("ML Engineer", "ML 엔지니어"), ("DevOps Engineer", "DevOps / 클라우드 엔지니어"),
+            ("Specialist", "미분류 / 기타"),
+        ]
+        postings = [{"title": title, "description": "SQL SQL"} for title, _ in cases]
+        result = analyze_postings(postings)
+        self.assertEqual([posting["role"] for posting in result["postings"]], [role for _, role in cases])
+        self.assertEqual(result["role_counts"], dict.fromkeys(ROLE_LABELS, 1))
+        self.assertEqual(result["skill_counts"], {"SQL": 9, "Machine Learning": 1})
+        expected = {role: {"SQL": 1} for role in ROLE_LABELS}
+        expected["ML 엔지니어"]["Machine Learning"] = 1
+        self.assertEqual(result["role_skill_counts"], expected)
+        self.assertEqual(result, analyze_postings(postings))
+        reversed_result = analyze_postings(list(reversed(postings)))
+        self.assertEqual(result["role_counts"], reversed_result["role_counts"])
+        self.assertEqual(result["role_skill_counts"], reversed_result["role_skill_counts"])
+
+    def test_unknown_with_no_skills_retains_empty_role_skill_mapping(self):
+        result = analyze_postings([{"title": None, "description": None}])
+        self.assertEqual(result["postings"][0]["role"], "미분류 / 기타")
+        self.assertEqual(result["role_counts"], {"미분류 / 기타": 1})
+        self.assertEqual(result["role_skill_counts"], {})
+
     def test_empty_input(self):
         self.assertEqual(analyze_postings([]), {
             "postings": [], "skill_counts": Counter(), "role_counts": Counter(),
@@ -80,12 +111,12 @@ class AnalyzerTest(unittest.TestCase):
 
     def test_single_posting_and_missing_optional_values(self):
         result = analyze_postings([{"title": "SQL specialist"}])
-        self.assertEqual(result["postings"], [{"title": "SQL specialist", "skills": ["SQL"], "role": "데이터 분석가"}])
+        self.assertEqual(result["postings"], [{"title": "SQL specialist", "skills": ["SQL"], "role": "미분류 / 기타"}])
         self.assertEqual(result["skill_counts"], {"SQL": 1})
-        self.assertEqual(result["role_counts"], {"데이터 분석가": 1})
+        self.assertEqual(result["role_counts"], {"미분류 / 기타": 1})
         self.assertEqual(result["career_counts"], {"미상": 1})
         self.assertEqual(result["region_counts"], {"미상": 1})
-        self.assertEqual(result["role_skill_counts"], {"데이터 분석가": {"SQL": 1}})
+        self.assertEqual(result["role_skill_counts"], {"미분류 / 기타": {"SQL": 1}})
 
     def test_multiple_postings_count_each_skill_once_per_posting(self):
         postings = [

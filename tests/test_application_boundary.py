@@ -13,6 +13,19 @@ from jobskillradar.storage import save_postings_to_db
 
 
 class ApplicationBoundaryTest(unittest.TestCase):
+    def test_expanded_roles_agree_before_and_after_storage(self):
+        collector = Mock(return_value=[
+            {"source": "test", "posting_id": "1", "title": "Backend Engineer", "description": "Docker AWS"},
+            {"source": "test", "posting_id": "2", "title": "Frontend Developer", "description": "TypeScript"},
+            {"source": "test", "posting_id": "3", "title": "Specialist", "description": "Python SQL"},
+        ])
+        direct = pipeline.collect_and_analyze("fake-key", ["software"], collector=collector)
+        self.assertEqual(pipeline.collect_work24_to_db("fake-key", ["software"], db_path=self.path, collector=collector), 3)
+        loaded = pipeline.load_db_analysis(db_path=self.path)
+        self.assertEqual(direct["role_counts"], {"백엔드 엔지니어": 1, "프론트엔드 엔지니어": 1, "미분류 / 기타": 1})
+        self.assertEqual(loaded["role_counts"], direct["role_counts"])
+        self.assertEqual(loaded["role_skill_counts"], direct["role_skill_counts"])
+
     def setUp(self):
         stack = ExitStack()
         self.addCleanup(stack.close)

@@ -1,8 +1,31 @@
 # Target Architecture — 개인용 Job Intelligence
 
-최신 추가 사항: Phase 2A(2026-09-16)에서 `skill_taxonomy.py`로 59개 canonical 기술과 alias·유지보수 category를 분리하고 추출 경계·겹침·canonicalization을 보강했다. Python 데이터 모듈을 사용하며 JSON/YAML taxonomy나 role_classifier는 도입하지 않았다. [추출 계약](02_data_design.md#phase-2a-기술-taxonomy와-추출-계약)과 [검증 기록](TEST_BASELINE.md#phase-2a-검증-2026-09-16)을 따른다. 아래 Phase 1C/1B 현황은 해당 단계 기록이며 저장 계약은 그대로다. Phase 2B는 시작하지 않았다.
+최신 상태: Phase 2B 역할 taxonomy·규칙 기반 분류 완료(2026-09-16). Phase 2A의 59개 기술과 추출 계약은 유지한다. 아래 Phase 1C/1B 현황과 장기 구조는 해당 단계 기록·설계 제안이며, 최신 분류 계약은 [데이터 설계](02_data_design.md#phase-2b-역할-taxonomy와-분류-계약), 검증은 [테스트 기준선](TEST_BASELINE.md#phase-2b-검증-2026-09-16)을 따른다. Phase 2C는 시작하지 않았다.
 
-상태: Phase 1C 저장 무결성·마이그레이션 완료(2026-09-16). 아래의 Phase 1C 현황이 최신이며 Phase 1B 기록은 당시 구조다. 장기 구조는 설계 제안이다. Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다.
+Phase 0 당시 사실은 [감사 문서](REFACTORING_AUDIT.md), 적용 순서는 [로드맵](ROADMAP_V2.md)을 따른다. Phase 1C 저장 무결성·마이그레이션 계약은 계속 유지한다.
+
+## Phase 2B 실제 구현과 변경 전 분류 감사
+
+변경 전 `analyzer.classify_role`의 판정 순서는 다음과 같았다. 모두 단순 부분 문자열 또는 기술 집합 교집합 검사였으며 처음 일치한 분기가 반환되었다.
+
+| 순서 | 근거 위치·조건 | 결과 |
+|---|---|---|
+| 1 | 제목: bi 또는 kpi | BI 분석가 |
+| 2 | 제목: 데이터 분석, 분석가, 분석 담당 | 데이터 분석가 |
+| 3 | 제목+본문: 엔지니어, 파이프라인, etl, 플랫폼 또는 기술: Spark/Airflow/Kafka/Docker/Kubernetes 중 하나 | ML 기술이 있으면 ML, 없으면 데이터 엔지니어 |
+| 4 | 제목+본문: 머신러닝, ml, ai, 딥러닝, nlp 또는 기술: Machine Learning/Deep Learning/NLP/PyTorch/TensorFlow 중 하나 | ML 엔지니어 |
+| 5 | 제목+본문: bi, 대시보드, dashboard, kpi 또는 기술: Tableau/Power BI/Looker 중 하나 | BI 분석가 |
+| 6 | 위 조건 미일치 | 데이터 분석가 |
+
+3번의 ML 기술은 4번과 같은 집합이다. 이 순서 때문에 Docker 하나가 Backend 제목을 무시하고 데이터 엔지니어를 선택했다. mobile의 bi, retail/email의 ai도 잘못된 근거가 됐다. 영어 Backend/Frontend/DevOps 직무는 표현할 수 없었고 무근거 fallback은 분석가 빈도를 부풀렸다. 주어진 입력에서 결과 자체는 결정적이었지만 업무상 우선순위가 잘못되어 있었다.
+
+`경력무관` 예상 실패는 별개다. `normalize_career`가 무관보다 경력 포함 여부를 먼저 검사해 발생하며, classifier는 career를 읽지 않는다. 해당 정상화 규칙과 expectedFailure는 변경하지 않았다.
+
+현재 구조는 작은 `role_classifier.py` 하나에 9개 canonical label, 제목/업무 구문 표, 경계 helper, 기술 조합 predicate, 충돌 해결 규칙을 둔다. `analyzer`는 기존 import 경로 호환을 위해 ROLE_LABELS/classify_role을 재노출하고 enrichment·Counter 집계만 유지한다. 숫자 가중치·가짜 confidence·새 result model은 없다.
+
+명시적 제목 → 업무/도메인 → 기술 조합 순서이며 같은 단계의 충돌은 미분류다. 더 긴 복합 구문이 포함된 일반 구문보다 우선하고, 명시적 Full-stack은 Backend/Frontend 조합을 포괄한다. 상세 규칙과 예외는 데이터 설계를 따른다.
+
+Streamlit은 기존에 analyzer.ROLE_LABELS를 import하므로 추가 역할이 자동으로 selector에 나타난다. 기존 4개 label·순서를 유지하고 5개를 뒤에 추가했다. UI·모델·DB·추천 코드는 수정하지 않았다. 새 역할에 foundation이 없어도 기존 추천기가 역할 빈도 또는 전체 빈도를 사용한다. 이 fallback의 제품상 적절성과 설명 문구는 Phase 2C 검토 대상이다.
 
 ## Phase 1C 실제 구현 현황
 

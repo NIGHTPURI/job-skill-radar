@@ -4,55 +4,7 @@ from collections import Counter, defaultdict
 
 from .models import AnalysisResult, JobPosting
 from .skill_extractor import extract_skills
-
-
-ROLE_LABELS = [
-    "데이터 분석가",
-    "데이터 엔지니어",
-    "ML 엔지니어",
-    "BI 분석가",
-]
-
-
-def classify_role(posting: dict, skills: list[str]) -> str:
-    title = posting.get("title", "").lower()
-    text = f"{title} {posting.get('description', '')}".lower()
-    skill_set = set(skills)
-
-    if any(token in title for token in ["bi", "kpi"]):
-        return "BI 분석가"
-
-    if any(token in title for token in ["데이터 분석", "분석가", "분석 담당"]):
-        return "데이터 분석가"
-
-    if any(token in text for token in ["엔지니어", "파이프라인", "etl", "플랫폼"]) or skill_set & {
-        "Spark",
-        "Airflow",
-        "Kafka",
-        "Docker",
-        "Kubernetes",
-    }:
-        if skill_set & {"Machine Learning", "Deep Learning", "NLP", "PyTorch", "TensorFlow"}:
-            return "ML 엔지니어"
-        return "데이터 엔지니어"
-
-    if any(token in text for token in ["머신러닝", "ml", "ai", "딥러닝", "nlp"]) or skill_set & {
-        "Machine Learning",
-        "Deep Learning",
-        "NLP",
-        "PyTorch",
-        "TensorFlow",
-    }:
-        return "ML 엔지니어"
-
-    if any(token in text for token in ["bi", "대시보드", "dashboard", "kpi"]) or skill_set & {
-        "Tableau",
-        "Power BI",
-        "Looker",
-    }:
-        return "BI 분석가"
-
-    return "데이터 분석가"
+from .role_classifier import ROLE_LABELS, classify_role
 
 
 def enrich_posting(posting: dict) -> JobPosting:

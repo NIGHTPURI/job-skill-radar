@@ -1,6 +1,6 @@
 # Phase 1A — Regression Test Baseline
 
-최신 결과는 문서 끝의 [Phase 2A 검증](#phase-2a-검증-2026-09-16)을 따른다. 앞의 Phase 1A/1B/1C 수치와 결함 설명은 당시 기록이다.
+최신 결과는 문서 끝의 [Phase 2B 검증](#phase-2b-검증-2026-09-16)을 따른다. 앞의 단계별 수치와 결함 설명은 당시 기록이다.
 
 기준일: 2026-09-16. 운영 코드 기준: `0ee3c40` (`Initial Job Skill Radar MVP`).
 환경: Windows PowerShell, Python 3.14.5, 표준 라이브러리 unittest/SQLite/mock 사용.
@@ -231,3 +231,42 @@ git diff --check
 남은 expected failure는 KD-05(비양수 추천 limit), KD-08(`경력무관`) 2개다. KD-04(직무 부분 문자열·기본 분류)와 KD-09(오류 XML)도 범위 밖이다. classifier 테스트 실패나 기대값 변경은 없었다. 별도 probe에서 `Spring Boot Redis` backend 공고의 데이터 분석가 fallback, `Docker.` 추출 복원 시 기존 데이터 엔지니어 규칙 활성화, mobile→BI/retail→ML을 확인했다. Phase 2B에서 검토하며 이번에 고치지 않았다.
 
 실제 공고 코퍼스 정밀도·재현율, UI, 실 API는 검증하지 않았다. 한글 조사·동음이의어·짧은 토큰의 잔여 모호성과 기존 v1 기술 행의 자동 재추출 부재는 [추출 계약](02_data_design.md#phase-2a-기술-taxonomy와-추출-계약)에 명시했다. Phase 2A 범위에서 종료한다.
+
+## Phase 2B 검증 (2026-09-16)
+
+시작 HEAD는 `fd78887` (`feat: expand skill taxonomy and improve extraction`)이며 작업 트리는 깨끗했다. 문서 5개와 현재 분류·추출·정제·모델·샘플 및 역할 label 소비 테스트/UI/추천 경로를 읽고, 수정 전 분류 순서를 [아키텍처 감사](TARGET_ARCHITECTURE.md#phase-2b-실제-구현과-변경-전-분류-감사)로 기록했다.
+
+| 검증 | 기준선 | 최종 |
+|---|---|---|
+| 전체 unittest | 171개: 169 통과, expected failures 2 (0.914초) | 210개: 208 통과, expected failures 2 |
+| analyzer | 15개 모두 통과 (0.003초) | 17개 모두 통과 |
+| role classifier | 기존 analyzer에 포함 | 신규 34개 모두 통과 |
+| skill extraction/canonicalization | 기존 전체에 포함 | 42개 모두 통과, 그중 canonicalization 9개 |
+| migration | 기존 전체에 포함 | 13개 모두 통과 |
+| persistence integrity | 기존 전체에 포함 | 15개 모두 통과 |
+| sample CLI | 12건, exit 0 | 동일 출력, exit 0 |
+| git diff --check | 출력 없음, exit 0 | 공백 오류 없음, exit 0 |
+
+기준선·최종 모두 failures/errors/skipped/unexpected successes는 0이다. 주요 검증 명령:
+
+```powershell
+python -B -m unittest discover -s tests -v
+python -B -m unittest discover -s tests -p test_role_classifier.py -v
+python -B -m unittest discover -s tests -p test_analyzer.py -v
+python -B -m unittest discover -s tests -p test_skill_extractor.py -v
+python -B -m unittest discover -s tests -p test_skill_extractor.py -k CanonicalizationTest -v
+python -B -m unittest discover -s tests -p test_migrations.py -v
+python -B -m unittest discover -s tests -p test_persistence_integrity.py -v
+python -X utf8 -B scripts/run_demo.py
+git diff --check
+```
+
+새로 추가한 테스트는 총 39개다: classifier 34, analyzer 집계·결측 2, recommender 새 역할 호환 2, application DB 왕복 1. 각 역할의 여러 영문/한글 공고, 강한 제목 우선, 기술 조합·단일 약한 기술, 경계·부분 문자열, 구체적 복합 제목, 같은 단계 충돌, 명시적 Full-stack, 순서·중복 독립성, career 비참조를 검증한다. sample fixture와 기술 추출 테스트는 변경하지 않았다.
+
+기존 classifier 재현 테스트는 새 계약으로 갱신했다. KD-04의 mobile/retail은 미분류, 백엔드는 Backend로 변경했다. 단일 기술로 역할을 결정하던 검증은 조합 검증으로 바꾸고 별도 단일 기술 부정 테스트를 추가했다. `SQL specialist`는 근거 부족으로 미분류가 된다. 플랫폼 엔지니어는 PyTorch 하나 때문에 ML로 바뀌지 않는다. 기존 테스트를 expectedFailure로 숨기지 않았다.
+
+남은 expectedFailure는 추천 limit KD-05와 경력 정제 KD-08이다. KD-08은 `normalize_career('경력무관')` 직접 호출로 재현되고 classifier가 호출되지 않으므로 이번 범위 밖이다. normalizer와 두 decorator를 유지했다. KD-09 오류 XML 문제도 수정하지 않았다.
+
+샘플 CLI는 데이터 분석가 6 / ML 3 / 데이터 엔지니어 2 / BI 1이며, 전체 기술 Counter와 추천 Python 9, Statistics 4, Tableau 3, Pandas 3, A/B Test 2가 기존과 같다. 새 역할에는 foundation을 추가하지 않았고 역할 빈도·global fallback·빈 데이터 호환 테스트가 통과한다.
+
+app.py는 기존 공유 ROLE_LABELS를 사용한다. 문법 검사와 코드 연결을 확인했지만 Streamlit/Plotly가 없어 실제 UI 실행은 하지 않았다. 실 API·실제 공고 코퍼스 정확도도 미검증이다. 새 규칙의 부정·인용·혼합 제목 한계 및 추천 fallback의 제품상 한계는 데이터 설계에 기록했다. Phase 2C는 시작하지 않았다.

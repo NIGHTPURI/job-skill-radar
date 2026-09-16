@@ -10,6 +10,26 @@ from jobskillradar.recommender import recommend_skills
 
 
 class RecommendationTest(unittest.TestCase):
+    def test_new_roles_without_foundations_use_role_counts(self):
+        for role in ("백엔드 엔지니어", "프론트엔드 엔지니어", "풀스택 엔지니어",
+                     "DevOps / 클라우드 엔지니어", "미분류 / 기타"):
+            with self.subTest(role=role):
+                analysis = {"role_skill_counts": {role: Counter({"Java": 3, "Redis": 1})},
+                            "skill_counts": Counter({"Python": 10})}
+                result = recommend_skills(role, [], analysis)
+                self.assertEqual([(item["skill"], item["score"]) for item in result], [("Java", 3), ("Redis", 1)])
+
+    def test_new_roles_retain_global_fallback_and_empty_behavior(self):
+        for role in ("백엔드 엔지니어", "프론트엔드 엔지니어", "풀스택 엔지니어",
+                     "DevOps / 클라우드 엔지니어", "미분류 / 기타"):
+            with self.subTest(role=role):
+                self.assertEqual(recommend_skills(role, [], {}), [])
+                for counts in ({}, {role: Counter()}):
+                    result = recommend_skills(role, [], {
+                        "role_skill_counts": counts, "skill_counts": Counter({"SQL": 2}),
+                    })
+                    self.assertEqual([(item["skill"], item["score"]) for item in result], [("SQL", 2)])
+
     def test_frequency_plus_foundation_scores_and_reasons(self):
         analysis = {"role_skill_counts": {"데이터 분석가": Counter({"Python": 5, "SQL": 2, "Kafka": 7})}}
         original = copy.deepcopy(analysis)

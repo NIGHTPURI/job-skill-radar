@@ -90,7 +90,65 @@ frontend framework는 이번 범위에 추가하지 않았다. `C`, `Go`, `AI`�
 
 기존 v1 DB를 여는 것만으로 저장 기술을 재작성하지 않는다. 분석은 원래부터 본문을 재추출하므로, 과거 규칙으로 저장한 posting_skills와 새 분석이 다를 수 있다. 정상 save_postings 재저장 시 최신 추출 집합으로 원자적 교체한다. v0 migration도 기존 설계대로 실행 시점의 extractor를 사용하므로 새 규칙의 기술 집합을 생성한다. migration 코드·버전·백업·rollback 방식은 변경하지 않았다. 자동 backfill이나 taxonomy 버전 저장은 이번 범위에 넣지 않았다.
 
-기술 추출 개선만으로 직무 분류가 정확해지지는 않는다. `Backend Engineer` + `Spring Boot Redis`는 여전히 데이터 분석가이고, `Docker.`의 검출 복원은 기존 분류기의 데이터 엔지니어 규칙을 활성화한다. `mobile developer`→BI, `retail assistant`→ML도 남아 있다. 이는 Phase 2B 검토사항이며 분류기와 추천 점수 공식은 수정하지 않았다.
+Phase 2A 당시에는 기술 추출 개선 후에도 `Backend Engineer` + `Spring Boot Redis`의 분석가 fallback, Docker 단일 기술의 데이터 엔지니어 판정, mobile→BI/retail→ML 문제가 남았다. 이 분류 결함은 아래 Phase 2B에서 수정했고 추천 점수 공식은 유지했다.
+
+## Phase 2B 역할 taxonomy와 분류 계약
+
+2026-09-16 기준. 역할은 분석 시 계산되는 문자열이며 DB 저장 필드가 아니다. `role_classifier.py`가 다음 canonical label을 정의하고 analyzer를 통해 UI와 기존 호출자에게 전달한다.
+
+| 역할 | canonical label |
+|---|---|
+| Backend Engineer | 백엔드 엔지니어 |
+| Frontend Engineer | 프론트엔드 엔지니어 |
+| Full-stack Engineer | 풀스택 엔지니어 |
+| Data Analyst | 데이터 분석가 |
+| BI Analyst | BI 분석가 |
+| Data Engineer | 데이터 엔지니어 |
+| ML / AI Engineer | ML 엔지니어 |
+| DevOps / Cloud Engineer | DevOps / 클라우드 엔지니어 |
+| Unknown / Other | 미분류 / 기타 |
+
+기존 4개 한국어 label은 추천 foundation key와 호환된다. 역할 목록 순서는 UI 표시 순서이며 판정 우선순위가 아니다. ML label은 AI/NLP 관련 엔지니어와 Data Scientist를 포함하는 현재의 넓은 역할 범주다.
+
+### 근거 계층과 경계
+
+1. **명시적 제목**: Backend/back-end/백엔드, Frontend/front-end/프론트엔드, Full-stack/풀스택, Data Analyst, BI Analyst, Data Engineer, ML/AI Engineer, DevOps/SRE/Cloud/Platform Engineer 및 명시한 한국어 표현을 검사한다. server는 단독으로 쓰면 미분류이며 server developer/서버 개발자 같은 개발 직무 표현을 요구한다.
+2. **업무·도메인 구문**: 제목에서 역할을 확정할 수 없을 때 제목과 본문 각각의 API 개발·UI 개발·통계 분석·대시보드 운영·ETL·data pipeline·model training·운영 자동화 등을 검사한다. AI API integration이나 일반 플랫폼·파이프라인 단어만으로 역할을 추론하지 않는다. data analysis/analytics, machine learning/deep learning, ETL처럼 업무 분야가 구체적인 구문도 이 단계의 근거다.
+3. **기술 조합**: 텍스트 근거가 없을 때만 아래 조합을 사용한다. 단일 기술은 역할을 확정하지 않는다. 중복 기술을 많이 넣어도 근거가 강해지지 않는다.
+4. 근거가 없거나 승리 단계에서 충돌하면 **미분류 / 기타**다. 더 약한 단계로 내려가 충돌을 임의로 해소하지 않는다. confidence 숫자는 만들지 않는다.
+
+casefold한 텍스트에서 Unicode 단어 경계를 검사한다. mobile/retail/email/bilingual/html 안의 bi/ai/ml을 찾지 않는다. 영문 구문의 공백·하이픈·탭 변형을 허용하고 한글이 연결된 구문은 띄어쓰기 생략을 허용한다. 한글 조사 은/는/이/가/을/를/의/와/과는 뒤에 단어 경계가 있을 때만 허용한다. `백엔드개발자`는 인식하고 `데이터분석가족`은 인식하지 않는다. 서로 다른 필드 끝과 시작을 붙여 가짜 구문을 만들지 않는다.
+
+### 역할별 근거
+
+| 역할 | 제목·업무 근거 예시 | 제목·업무 근거가 없을 때의 기술 조합 |
+|---|---|---|
+| Backend | backend, 백엔드, server developer, API developer, API development, 서버 개발 | Spring 계열 + Java/Kotlin/Redis/Kafka/REST API/ORM/DB 중 하나, 또는 Java/Kotlin + ORM + DB/Redis/Kafka |
+| Frontend | frontend, 프론트엔드, UI developer, web UI development | 없음. JavaScript/TypeScript만으로 backend와 구분할 수 없음 |
+| Full-stack | full-stack, 풀스택, full stack development | 없음. Java+JavaScript만으로 추론하지 않음 |
+| Data Analyst | data analyst, 데이터 분석가, data analysis, statistical analysis, 공공데이터 분석 | Statistics/A/B Test + Python/R/Pandas/SQL |
+| BI Analyst | BI analyst, business intelligence, KPI analyst/reporting, dashboard development, 대시보드 운영 | Tableau/Power BI/Looker + SQL/Excel |
+| Data Engineer | data engineer/platform engineer, 데이터 엔지니어/플랫폼 엔지니어, ETL/ELT, data pipeline/warehouse/lake | Spark/Airflow + SQL/Kafka/AWS/GCP/Azure, 또는 Spark+Airflow |
+| ML / AI | ML/AI engineer, 머신러닝 엔지니어, NLP engineer, data scientist, model training, 자연어 처리 | PyTorch/TensorFlow + Python/Machine Learning/Deep Learning/NLP |
+| DevOps / Cloud | DevOps, SRE, cloud/platform/infrastructure engineer, 인프라 엔지니어, 배포·운영 자동화 | Docker/Kubernetes + CI/CD/Jenkins/GitHub Actions + AWS/GCP/Azure/Linux |
+
+위 표의 `+`는 서로 다른 그룹을 함께 요구하고 `/`는 그룹 안의 선택지다. ORM은 JPA/Hibernate/QueryDSL, DB는 MySQL/PostgreSQL/MariaDB/Oracle/MongoDB, Spring 계열은 Spring/Spring Boot/Spring MVC/Spring Security다. 기술 조합이 여러 역할을 동시에 만족하면 투표·고정 역할 순서로 고르지 않고 미분류로 남긴다.
+
+### 구체성·모호성 정책
+
+- 같은 위치에서 `data platform engineer`는 내부의 `platform engineer`를 포함하므로 Data Engineer만 근거로 남는다. `ML platform engineer`도 일반 Platform보다 구체적이다. `BI Data Analyst`는 BI로 취급한다.
+- 별도 위치의 명시적 직무가 충돌하는 `Backend Engineer / Data Engineer`, `Backend / Frontend`는 미분류다. 단, Full-stack이 명시되고 나머지가 Backend/Frontend뿐이면 Full-stack으로 분류한다. `Full-stack / Data Engineer`까지 합치지는 않는다.
+- `Backend Engineer — Docker, AWS`, `ML platform backend`, `Backend engineer working on AI services`는 Backend다. `Data Engineer — Docker, Kubernetes`는 Data Engineer, `ML Engineer — Java, Spring Boot, PyTorch`는 ML, `DevOps Engineer — Python, SQL`은 DevOps다.
+- 강한 Data Analyst 제목에 Tableau가 있어도 BI로 바꾸지 않는다. Backend 제목에 Kafka/Airflow가 있어도 Data Engineer로 바꾸지 않는다. 제목 자체가 충돌하면 기술 조합으로 한쪽을 선택하지 않는다.
+- career 필드는 분류에 사용하지 않는다. `경력무관`→`경력`은 normalizer의 별도 결함이므로 그대로 남아 있다.
+
+### 호환성과 한계
+
+role_counts/role_skill_counts는 새로운 label을 그대로 집계한다. 공고·기술 순서와 Counter 누적 방식은 변경하지 않았다. 기술 없는 미분류 공고도 role_counts에는 포함되며 기존처럼 role_skill_counts에는 빈 항목을 강제로 만들지 않는다. 빈 입력 계약과 기존 샘플 12건의 기술·직무·추천 결과는 유지된다. DB schema/version/identity/migration 및 기술 추출은 변경하지 않았다.
+
+UI selector는 공유 ROLE_LABELS를 사용하여 확장된다. 새 역할과 미분류에는 추천 foundation을 만들지 않았다. 기존 추천 공식은 해당 역할 빈도가 있으면 사용하고, 없거나 비어 있으면 전체 빈도로 대체한다. 이때 목표 직무 빈도라는 기존 설명이 실제 근거와 다를 수 있고 미분류는 직무 목표가 아니므로, Phase 2C에서 fallback·설명·선택 정책을 검토해야 한다.
+
+규칙은 부정문, 다른 팀 직무 인용, 제목 안의 주업무/부업무 문법, 복잡한 조사·복수형을 완전히 해석하지 않는다. 명시된 혼합 직무는 미분류 비율을 높일 수 있다. 일반 server/플랫폼/AI, JavaScript+TypeScript는 의도적으로 보수적이며 frontend framework 기술 조합은 아직 없다. Data Scientist를 ML에 포함한 넓은 범주와 BI/통계 혼합 공고는 실제 코퍼스로 추가 평가할 여지가 있다. 새로운 기술·역할·추천 모델을 이 단계에서 선제 도입하지 않는다.
 
 ## 데이터 소스
 

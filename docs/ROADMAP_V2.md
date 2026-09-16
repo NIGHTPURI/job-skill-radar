@@ -86,6 +86,17 @@
 - schema/migration/identity/저장 의미, 직무 분류, 추천 점수, UI는 변경하지 않았다. 기존 v1 DB의 기술 행을 자동 backfill하지 않는다.
 - Phase 2B는 미시작이다. backend fallback, 부분 문자열 분류, Docker/Kafka 등의 기술 하나로 직무를 결정하는 현행 규칙 및 개선된 추출이 그 규칙에 미치는 영향은 후속 검토사항이다.
 
+## Phase 2B — Role Taxonomy and Classification Reliability 완료 (2026-09-16)
+
+현재 사용자 지정 Phase 2B는 역할 taxonomy와 결정적 규칙 기반 분류다. 과거 저장 일관성 계획의 같은 번호와 구분한다.
+
+- `role_classifier.py`에서 Backend/Frontend/Full-stack/Data Analyst/BI/Data Engineer/ML·AI/DevOps·Cloud/Unknown의 9개 역할을 정의했다. 기존 4개 canonical label과 analyzer import 경로는 유지한다.
+- 명시적 제목 → 업무·도메인 → 기술 조합 → 미분류 순서다. 구체적인 복합 구문이 내부의 일반 구문보다 우선하며, 같은 단계의 독립적인 충돌은 미분류로 처리한다. Full-stack은 명시적 근거가 있어야 한다.
+- 단일 Docker/AWS/Java/SQL/Python으로 직무를 확정하지 않는다. mobile/retail/email 부분 문자열 오분류와 데이터 분석가 기본 fallback을 제거했다. 경력무관 결함은 role이 아닌 career 정제 문제이므로 유지했다.
+- 전체 210개 중 208 통과·예상 실패 2, 일반 실패/오류 0. classifier 34개, analyzer 17개, 추출 42개, migration 13개, persistence integrity 15개 통과. 샘플 CLI 결과 동일, 공백 검사 통과.
+- 기존 UI는 공유 역할 목록으로 확장된다. 추천 공식과 foundation은 바꾸지 않았으며 새 역할의 빈도·fallback 동작을 검증했다. schema/migration/identity/저장 의미 및 Phase 2A 기술 taxonomy·추출기는 변경하지 않았다.
+- [분류 계약](02_data_design.md#phase-2b-역할-taxonomy와-분류-계약)과 [검증 기록](TEST_BASELINE.md#phase-2b-검증-2026-09-16)을 따른다. Phase 2C는 미시작이며 추천 fallback·설명·새 역할/미분류 선택 정책 등 남은 제품 범위는 별도 요청 후 확정한다.
+
 ## 원래 Phase 2 계획 — 저장 일관성과 수집 관측 기반 (과거 제안)
 
 **목표·동기**: 오래된 본문과 누적 기술의 불일치를 먼저 해결하고 이후 개인 기록을 연결할 안정적인 공고 identity를 마련한다.
@@ -256,6 +267,6 @@
 
 ## 바로 다음 작업 제안
 
-**Phase 2A는 완료했다.** 기술 taxonomy와 추출 신뢰성 개선에서 종료한다. Phase 2B는 별도 요청 후 분류기 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
+**Phase 2B는 완료했다.** 역할 taxonomy와 분류 신뢰성 개선에서 종료한다. Phase 2C는 별도 요청 후 범위를 확정한다. 최초 legacy DB 이전은 다른 writer를 중지한 상태에서 수행하고, 백업·복원 절차는 데이터 설계를 따른다.
 
-Phase 1C 저장 무결성과 Phase 2A 추출 회귀 테스트가 현재 기준선이다. 직무 분류·추천 점수는 변경하지 않았다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.
+Phase 1C 저장 무결성, Phase 2A 추출, Phase 2B 분류 회귀 테스트가 현재 기준선이다. 추천 점수 공식은 변경하지 않았다. FastAPI/React/PostgreSQL 전환은 이 로드맵의 목표가 아니다.
