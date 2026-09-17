@@ -3,6 +3,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -63,7 +64,8 @@ class ProfileUiTest(unittest.TestCase):
         self.assertIsNone(pipeline.load_profile(db_path=self.path))
 
     def test_existing_v2_database_migrates_on_app_start_without_repeated_backup(self):
-        with sqlite3.connect(self.path) as conn:
+        # The connection context commits/rolls back; closing owns the file handle.
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.executescript((ROOT / 'tests/fixtures/v2_schema.sql').read_text())
             conn.execute("INSERT INTO job_postings(source,posting_id,title,created_at) VALUES ('work24','one','SQL','2000-01-01')")
         app = self.app()
@@ -71,9 +73,12 @@ class ProfileUiTest(unittest.TestCase):
         self.assertEqual(len(list(self.path.parent.glob('*.pre-v4-from-v2-*.bak'))), 1)
         self.assertFalse(self.app().exception)
         self.assertEqual(len(list(self.path.parent.glob('*.bak'))), 1)
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 4)
             self.assertEqual(conn.execute('SELECT created_at FROM job_postings').fetchone()[0], '2000-01-01')
+        # Completed app runs must allow deletion even while app is still referenced.
+        self.path.unlink()
+        self.assertFalse(self.path.exists())
 
 
 if __name__ == '__main__':
